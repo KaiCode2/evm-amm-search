@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+  checks: write
+
+defaults:
+  run:
+    working-directory: evm-amm-search
+
+jobs:
+  check:
+    name: test / clippy / fmt / docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: evm-amm-search
+      - uses: actions/checkout@v4
+        with:
+          repository: KaiCode2/evm-amm-state
+          path: evm-amm-state
+      - uses: actions/checkout@v4
+        with:
+          repository: KaiCode2/evm-fork-cache
+          path: evm-fork-cache
+      - uses: actions/checkout@v4
+        with:
+          repository: KaiCode2/alloy-transport-balancer
+          path: alloy-transport-balancer
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: evm-amm-search
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Tests
+        run: cargo test --all-features
+
+      - name: Feature isolation
+        run: cargo check --all-targets --no-default-features
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Docs
+        run: cargo doc --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: Security audit
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: evm-amm-search
+          # Inactive optional dependency recorded by ark-relations; see
+          # RELEASING.md for the command that verifies it is not in the graph.
+          ignore: RUSTSEC-2025-0055
+
+  msrv:
+    name: msrv (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: evm-amm-search
+      - uses: actions/checkout@v4
+        with:
+          repository: KaiCode2/evm-amm-state
+          path: evm-amm-state
+      - uses: actions/checkout@v4
+        with:
+          repository: KaiCode2/evm-fork-cache
+          path: evm-fork-cache
+      - uses: actions/checkout@v4
+        with:
+          repository: KaiCode2/alloy-transport-balancer
+          path: alloy-transport-balancer
+
+      - uses: dtolnay/rust-toolchain@1.88
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: evm-amm-search
+
+      - run: cargo check --all-features

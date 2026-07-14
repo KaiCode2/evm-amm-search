@@ -1,0 +1,79 @@
+# Copy to .amm-route-tui.toml or point AMM_ROUTE_TUI_CONFIG at this file.
+# Defaults are kept unless replace_default_tokens = true.
+# Symbols typed in the TUI can also resolve through AMM_ROUTE_TUI_TOKEN_REGISTRY_URL;
+# list tokens here when you want deterministic local names/decimals.
+replace_default_tokens = false
+
+# Networking defaults are tuned from the cold-start benchmark. Two or more
+# HTTP endpoints use 32 concurrent pool jobs; one endpoint uses 16. Set an
+# explicit value to override that adaptive choice.
+[network]
+# cold_start_concurrency = 32
+rpc_batch_size = 150
+point_read_slots_per_batch = 150
+point_read_concurrency = 8
+bulk_max_slots_per_call = 25000
+bulk_max_slots_per_request = 25000
+bulk_max_request_bytes = 2400000
+bulk_max_concurrent_calls = 4
+max_log_addresses_per_subscription = 1024
+
+# AMM_ROUTE_TUI_RPC_URLS still takes precedence when set. Known Alchemy and
+# QuickNode hosts receive benchmarked safe body limits automatically; unknown
+# providers default conservatively. Every value below can be overridden.
+#
+# [[network.rpc_endpoints]]
+# url = "https://eth-mainnet.g.alchemy.com/v2/..."
+# weight = 150
+# max_request_bytes = 2400000
+# max_in_flight = 32
+#
+# [[network.rpc_endpoints]]
+# url = "https://example.quiknode.pro/..."
+# weight = 100
+# max_request_bytes = 5000000
+# max_in_flight = 24
+
+[[tokens]]
+symbol = "COMP"
+address = "0xc00e94Cb662C3520282E6f5717214004A7f26888"
+decimals = 18
+
+# Generic manual pools can be added when factory discovery does not cover a venue.
+# Supported protocols: uniswap_v2, sushiswap_v2, uniswap_v3, pancake_v3, curve.
+#
+# [[pools]]
+# protocol = "uniswap_v2"
+# label = "Custom V2 COMP/WETH"
+# address = "0x..."
+# tokens = [
+#   "0xc00e94Cb662C3520282E6f5717214004A7f26888",
+#   "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+# ]
+# fee_bps = 30
+#
+# V3-style manual pools must include fee in hundredths of a bip:
+# 500 = 0.05%, 3000 = 0.30%, 10000 = 1.00%.
+#
+# [[pools]]
+# protocol = "uniswap_v3"
+# label = "Custom V3 COMP/WETH 0.30%"
+# address = "0x..."
+# tokens = [
+#   "0xc00e94Cb662C3520282E6f5717214004A7f26888",
+#   "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+# ]
+# fee = 3000
+#
+# [[curve_pools]]
+# label = "Custom Curve stable pool"
+# address = "0x..."
+# coins = [
+#   "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+#   "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+# ]
+# variant = "stable"
+# Optional provider-verified `get_dy` storage slots. Supplying these selects the
+# one-round background verifier; otherwise a first-time custom Curve pool needs
+# a registration archive produced by a discovery-capable bootstrap.
+# discovered_slots = ["0x2", "0x7", "0x9"]

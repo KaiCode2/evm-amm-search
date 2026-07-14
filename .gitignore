@@ -1,0 +1,25 @@
+# Build artifacts
+/target/
+/.cache/
+/bench-cache/
+
+# Local environment
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# OS junk
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor junk
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
