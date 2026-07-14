@@ -2609,9 +2609,9 @@ impl<'a> AmmSearcher<'a> {
     /// Find and quote many route requests over a fixed worker pool.
     ///
     /// Each worker gets one isolated `EvmOverlay` and processes whole route
-    /// requests serially. This is the Fynd-style path to prefer when the caller
-    /// has many independent searches, because it avoids spawning threads per
-    /// request.
+    /// requests serially. This is the fixed-worker-pool path to prefer when the
+    /// caller has many independent searches, because it avoids spawning threads
+    /// per request.
     pub fn find_routes_batch_parallel(
         &self,
         requests: &[RouteRequest],

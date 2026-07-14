@@ -17,10 +17,9 @@ synchronization, and exact pool quoting. This crate adds the search layer:
 4. Build an `AmmGraph` from the registry.
 5. Use `AmmSearcher` to find best A-to-B routes or bounded cycles.
 
-The graph follows the same high-level shape as Fynd: token addresses are nodes
-and directed AMM swap opportunities are edges. Multi-token pools are fully
-connected with directed edges between every distinct token pair, and parallel
-pools on the same pair remain separate edges.
+Token addresses are graph nodes and directed AMM swap opportunities are edges.
+Multi-token pools are fully connected with directed edges between every distinct
+token pair, and parallel pools on the same pair remain separate edges.
 
 ## Example
 
@@ -976,3 +975,9 @@ they diverged from the exhaustive audit in `2` to `3` out of `40` queries.
 V1 ranks routes by gross output. It does not include gas-aware ranking, split
 routing, transaction encoding, HTTP serving, or pool bootstrap helpers. Discovery
 and cold-start remain explicit `evm-amm-state` steps.
+
+## Honourable Mention
+
+[Fynd](https://github.com/propeller-heads/fynd) is a high-performance real-time
+DeFi routing engine built on Tycho and was a useful reference point for
+graph-based routing. It is well worth exploring alongside this crate.
