@@ -1,0 +1,49 @@
+# Built-in Ethereum profile. The secret URL is interpolated after TOML parsing.
+extends = "ethereum-mainnet"
+
+[server]
+listen = "0.0.0.0:8080"
+admin_bearer_token = "${AMM_ROUTE_ADMIN_TOKEN}"
+
+[rpc]
+canonical_ws = "${ETHEREUM_WS_URL}"
+
+# Optional load-balanced HTTP state providers. When omitted, canonical_ws also
+# serves state reads.
+# [[rpc.state]]
+# url = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+# weight = 150
+# max_request_bytes = 2400000
+# max_in_flight = 32
+
+[routing]
+default_quality = "balanced"
+default_max_hops = 3
+default_top_k = 3
+default_timeout_ms = 5000
+max_hops = 4
+max_top_k = 5
+max_timeout_ms = 15000
+allow_exhaustive = true
+
+[discovery]
+quote_default = "if_missing"
+max_startup_pools = 128
+max_concurrent_requests = 8
+negative_ttl_secs = 300
+
+# Profile additions merge by address. These examples are already included by
+# the built-in profile; add your own tokens/factories/pools the same way.
+# [[tokens]]
+# symbol = "LDO"
+# address = "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32"
+# decimals = 18
+# connector = false
+
+# [[pools]]
+# protocol = "uniswap_v3"
+# address = "0x..."
+# tokens = ["0x...", "0x..."]
+# fee = 3000
+# factory = "0x..."
+# quoter = "0x..."

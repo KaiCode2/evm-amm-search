@@ -10,6 +10,7 @@ categories = ["cryptography::cryptocurrencies", "simulation"]
 readme = "README.md"
 repository = "https://github.com/KaiCode2/evm-amm-search"
 documentation = "https://docs.rs/evm-amm-search"
+exclude = ["sidecar"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -18,6 +19,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 # Standalone workspace root: keeps this crate from being absorbed by any
 # ancestor-directory workspace and gives it its own Cargo.lock.
 [workspace]
+exclude = ["sidecar"]
+resolver = "2"
 
 [features]
 default = [

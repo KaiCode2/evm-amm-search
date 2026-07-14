@@ -5,6 +5,14 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- An experimental, separately packaged HTTP routing sidecar with TOML profiles,
+  warm canonical state, bounded fast/balanced/exhaustive quotes, and token
+  prewarming/discovery endpoints.
+- HTTP contract tests, fail-fast configuration bounds, and a non-root/read-only
+  Docker smoke gate for the sidecar deployment artifact.
+
 ## [0.1.1] - 2026-07-21
 
 ### Changed

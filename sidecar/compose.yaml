@@ -1,0 +1,19 @@
+services:
+  router:
+    build:
+      context: ..
+      dockerfile: sidecar/Dockerfile
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      ETHEREUM_WS_URL: ${ETHEREUM_WS_URL:?set ETHEREUM_WS_URL}
+      AMM_ROUTE_ADMIN_TOKEN: ${AMM_ROUTE_ADMIN_TOKEN:?set AMM_ROUTE_ADMIN_TOKEN}
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./examples/ethereum-mainnet.toml:/config/config.toml:ro

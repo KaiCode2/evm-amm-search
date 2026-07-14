@@ -14,24 +14,61 @@ from the packaged manifest and resolves the stated crates.io versions.
 
 ```bash
 cargo fmt --all -- --check
+cargo fmt --manifest-path sidecar/Cargo.toml --all -- --check
 cargo test --all-features
+cargo test --locked --manifest-path sidecar/Cargo.toml
 cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --locked --manifest-path sidecar/Cargo.toml --all-targets -- -D warnings
 cargo check --all-targets --no-default-features
 RUSTDOCFLAGS='-D warnings' cargo doc --all-features --no-deps
+RUSTDOCFLAGS='-D warnings' cargo doc --locked --manifest-path sidecar/Cargo.toml --no-deps
 cargo +1.88 check --all-targets --all-features
+cargo +1.88 check --locked --manifest-path sidecar/Cargo.toml
 cargo audit --ignore RUSTSEC-2025-0055
 cargo bench --bench graph_lifecycle
 cargo bench --all-features --bench live_search_runtime
 cargo publish --dry-run
 ```
 
+Refresh the sidecar lockfile with its declared MSRV as the resolver ceiling:
+
+```bash
+CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback \
+  cargo +1.88 update --manifest-path sidecar/Cargo.toml
+```
+
+Build the sidecar from the `evm-amm-search` repository root and run its
+artifact-level smoke gate:
+
+```bash
+docker build -f sidecar/Dockerfile \
+  -t evm-amm-route-sidecar:release-candidate .
+sidecar/scripts/smoke-container.sh \
+  evm-amm-route-sidecar:release-candidate
+
+ETHEREUM_WS_URL=wss://your-private-mainnet-node \
+  sidecar/scripts/live-smoke-container.sh \
+  evm-amm-route-sidecar:release-candidate
+```
+
+Run these commands from the `evm-amm-search` repository root. The image is
+built solely from this checkout and the exact crates.io releases recorded in
+`sidecar/Cargo.lock`; sibling crate checkouts are not part of its build context.
+
+The sidecar remains `publish = false` and is excluded from the normalized
+`evm-amm-search` crate. It ships with repository tags/container artifacts, not
+inside the crates.io tarball. Describe it as experimental until load, provider
+disconnect, and reorg gates are automated.
+
 `RUSTSEC-2025-0055` is narrowly ignored because `ark-relations` records
 `tracing-subscriber 0.2.25` as an optional lockfile dependency while it remains
 absent from `cargo tree --target all --all-features`. Remove the exception if
 that version enters the active graph.
 
-The checked-in CI workflow reproduces the test/clippy/docs/MSRV matrix with
-sibling state and cache checkouts. The package surface intentionally includes
+The core-crate CI jobs reproduce the test/clippy/docs/MSRV matrix with sibling
+state and cache checkouts for local path development. The sidecar container job
+deliberately uses only this repository and released crates.io dependencies. The
+package surface intentionally includes
 the examples, tests, benchmark sources, sample configuration, and Solidity
 sources/runtime artifact: they are the executable documentation and fixtures
 for the public search crate, and no endpoint or local `.env` file is included.

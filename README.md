@@ -21,6 +21,13 @@ Token addresses are graph nodes and directed AMM swap opportunities are edges.
 Multi-token pools are fully connected with directed edges between every distinct
 token pair, and parallel pools on the same pair remain separate edges.
 
+An experimental deployment package is available in the repository's
+[`sidecar`](https://github.com/KaiCode2/evm-amm-search/tree/main/sidecar) directory.
+It keeps one chain's graph and canonical WebSocket connection warm behind a
+bounded REST API, including quote-time discovery and explicit token prewarming.
+It is deliberately excluded from the library's public API and crates.io package;
+see the sidecar README for its supported boundary and release status.
+
 ## Example
 
 ```rust,no_run
