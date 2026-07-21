@@ -242,6 +242,24 @@ through `LoadBalancedTransport` + batching + gzip, release build, 10 workers.
 The graph had `117` indexed pools, `8` token nodes, and `234` directed AMM
 edges.
 
+### Search Engine Internals
+
+The hot path is intentionally split into graph work and simulation work. The
+graph stores a `StableDiGraph` for stable node/edge identity and also maintains
+a cached outgoing-edge view for route expansion. The cached view mirrors the
+graph iterator order, so heuristic ordering and prefix-dominance behavior stay
+stable while search avoids repeated node-token and edge-weight lookups.
+
+Each heuristic request also keeps a request-local scheduler cache for token
+degree and connector-liquidity scores. That cache is discarded after the
+request, so it cannot go stale across graph updates, but it prevents repeated
+centrality scoring inside fast-lane connector selection and frontier ordering.
+
+The memory tradeoff is one small cached record per directed graph edge plus a
+short-lived per-request map for touched tokens/connectors. See
+[`docs/search-performance-model.md`](docs/search-performance-model.md) for the
+implementation notes, safety boundaries, and scheduler-only benchmark results.
+
 ### Cache Setup
 
 | Step | First run |

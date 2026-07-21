@@ -122,6 +122,19 @@ impl EdgeData {
     }
 }
 
+/// Cached directed edge view used by hot search loops.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CachedOutgoingEdge {
+    /// Target token node.
+    pub(crate) target: NodeIndex,
+    /// Source token.
+    pub(crate) token_in: Address,
+    /// Target token.
+    pub(crate) token_out: Address,
+    /// Pool that can execute this directed token pair.
+    pub(crate) pool: PoolKey,
+}
+
 /// Options for building an [`AmmGraph`] from an adapter registry.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct GraphBuildOptions {
@@ -195,6 +208,7 @@ pub struct AmmGraph {
     edge_map: HashMap<PoolKey, Vec<EdgeIndex>>,
     pool_tokens: HashMap<PoolKey, Vec<Address>>,
     pair_pools: HashMap<(Address, Address), HashSet<PoolKey>>,
+    outgoing_edges: HashMap<NodeIndex, Vec<CachedOutgoingEdge>>,
     version: GraphVersion,
 }
 
@@ -383,6 +397,13 @@ impl AmmGraph {
             .unwrap_or_default()
     }
 
+    pub(crate) fn outgoing_edges(&self, node: NodeIndex) -> &[CachedOutgoingEdge] {
+        self.outgoing_edges
+            .get(&node)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
     pub(crate) fn tracked_tokens_for_pool(
         &self,
         pool: &PoolKey,
@@ -448,6 +469,15 @@ impl AmmGraph {
                 let edge = self
                     .graph
                     .add_edge(*from_node, *to_node, EdgeData::new(pool.clone()));
+                self.outgoing_edges.entry(*from_node).or_default().insert(
+                    0,
+                    CachedOutgoingEdge {
+                        target: *to_node,
+                        token_in: tokens[from_idx],
+                        token_out: tokens[to_idx],
+                        pool: pool.clone(),
+                    },
+                );
                 self.edge_map.entry(pool.clone()).or_default().push(edge);
             }
         }
@@ -474,6 +504,14 @@ impl AmmGraph {
         let removed = edges.len();
         for edge in edges {
             self.graph.remove_edge(edge);
+        }
+        for token in &tokens {
+            let Some(node) = self.node_map.get(token) else {
+                continue;
+            };
+            if let Some(edges) = self.outgoing_edges.get_mut(node) {
+                edges.retain(|edge| edge.pool != *pool);
+            }
         }
         (removed, tokens)
     }
@@ -516,6 +554,7 @@ impl AmmGraph {
                     .is_some();
             if !has_edges {
                 self.graph.remove_node(node);
+                self.outgoing_edges.remove(&node);
                 self.node_map.remove(token);
             }
         }

@@ -22,7 +22,7 @@ use evm_amm_state::adapters::{
 use evm_fork_cache::cache::EvmCache;
 #[cfg(feature = "live-runtime")]
 use evm_fork_cache::cache::{EvmOverlay, EvmSnapshot};
-use petgraph::{Direction, visit::EdgeRef};
+use petgraph::Direction;
 
 #[cfg(feature = "live-runtime")]
 use crate::live_graph::LiveAmmGraph;
@@ -2993,8 +2993,14 @@ impl<'a> AmmSearcher<'a> {
             .graph
             .node_index(&token_out)
             .ok_or(SearchError::TokenNotFound(token_out))?;
-        let connector_tokens =
-            self.connector_tokens_for_heuristic(token_in, token_out, config, heuristic);
+        let mut run_cache = HeuristicRunCache::default();
+        let connector_tokens = self.connector_tokens_for_heuristic(
+            token_in,
+            token_out,
+            config,
+            heuristic,
+            &mut run_cache,
+        );
 
         let mut quotes = Vec::new();
         let mut failures = Vec::new();
@@ -3010,6 +3016,7 @@ impl<'a> AmmSearcher<'a> {
                 heuristic,
                 connector_tokens.as_ref(),
                 quote_cache,
+                &mut run_cache,
             );
             if !fast_lane_paths.is_empty() {
                 quote_cache.record_liquidity_prune_stats(LiquidityPruneStats {
@@ -3158,6 +3165,7 @@ impl<'a> AmmSearcher<'a> {
                         config.liquidity_pruning,
                         quote_cache,
                         allow_final_source_revisit,
+                        &mut run_cache,
                     );
 
                     for group in grouped_hops {
@@ -3434,6 +3442,7 @@ impl<'a> AmmSearcher<'a> {
         heuristic: HeuristicSearchConfig,
         connector_tokens: Option<&HashSet<Address>>,
         quote_cache: &SharedQuoteCache,
+        run_cache: &mut HeuristicRunCache,
     ) -> Vec<RoutePath> {
         let mut paths = Vec::new();
         let mut seen = HashSet::new();
@@ -3463,7 +3472,7 @@ impl<'a> AmmSearcher<'a> {
 
         if config.max_hops >= 2 && config.min_hops <= 2 {
             for connector in self
-                .ranked_central_connectors(token_in, token_out, connector_tokens)
+                .ranked_central_connectors(token_in, token_out, connector_tokens, run_cache)
                 .into_iter()
                 .take(heuristic.fast_lane.max_connectors)
             {
@@ -3524,12 +3533,11 @@ impl<'a> AmmSearcher<'a> {
         };
         let hops = self
             .graph
-            .graph()
-            .edges(node)
+            .outgoing_edges(node)
+            .iter()
             .filter_map(|edge| {
-                let next_token = self.graph.node_token(edge.target())?;
-                (next_token == token_out)
-                    .then(|| Hop::new(edge.weight().pool.clone(), token_in, token_out))
+                (edge.token_out == token_out)
+                    .then(|| Hop::new(edge.pool.clone(), edge.token_in, edge.token_out))
             })
             .collect::<Vec<_>>();
         self.liquidity_ranked_hops(
@@ -3546,34 +3554,56 @@ impl<'a> AmmSearcher<'a> {
         token_in: Address,
         token_out: Address,
         connector_tokens: Option<&HashSet<Address>>,
+        run_cache: &mut HeuristicRunCache,
     ) -> Vec<Address> {
         let mut candidates = connector_tokens
             .map(|tokens| tokens.iter().copied().collect::<Vec<_>>())
             .unwrap_or_else(|| {
-                self.auto_connector_tokens(token_in, token_out, HeuristicSearchConfig::default())
-                    .into_iter()
-                    .collect()
+                self.auto_connector_tokens(
+                    token_in,
+                    token_out,
+                    HeuristicSearchConfig::default(),
+                    run_cache,
+                )
+                .into_iter()
+                .collect()
             });
         candidates.retain(|token| *token != token_in && *token != token_out);
-        candidates.sort_by(|left, right| {
-            let left_score = self.connector_liquidity_score(*left);
-            let right_score = self.connector_liquidity_score(*right);
-            right_score
-                .known_balances
-                .cmp(&left_score.known_balances)
-                .then_with(|| right_score.degree.cmp(&left_score.degree))
-                .then_with(|| right_score.log_sum.cmp(&left_score.log_sum))
-                .then_with(|| left.as_slice().cmp(right.as_slice()))
+        candidates.sort_by_cached_key(|token| {
+            let score = self.connector_liquidity_score_cached(*token, run_cache);
+            (
+                Reverse(score.known_balances),
+                Reverse(score.degree),
+                Reverse(score.log_sum),
+                *token,
+            )
         });
         candidates.dedup();
         candidates
     }
 
-    fn connector_liquidity_score(&self, token: Address) -> ConnectorScore {
+    fn connector_liquidity_score_cached(
+        &self,
+        token: Address,
+        run_cache: &mut HeuristicRunCache,
+    ) -> ConnectorScore {
+        if let Some(score) = run_cache.connector_scores.get(&token).copied() {
+            return score;
+        }
+        let score = self.connector_liquidity_score(token, run_cache);
+        run_cache.connector_scores.insert(token, score);
+        score
+    }
+
+    fn connector_liquidity_score(
+        &self,
+        token: Address,
+        run_cache: &mut HeuristicRunCache,
+    ) -> ConnectorScore {
         let Some(node) = self.graph.node_index(&token) else {
             return ConnectorScore::default();
         };
-        let degree = self.token_degree(node);
+        let degree = self.token_degree_cached(node, run_cache);
         let Some(liquidity_index) = self.liquidity_index else {
             return ConnectorScore {
                 degree,
@@ -3618,19 +3648,16 @@ impl<'a> AmmSearcher<'a> {
         liquidity_config: LiquidityPruningConfig,
         quote_cache: &SharedQuoteCache,
         allow_final_source_revisit: bool,
+        run_cache: &mut HeuristicRunCache,
     ) -> Vec<HeuristicHopGroup> {
         let mut grouped = HashMap::<Address, Vec<Hop>>::new();
         let remaining_after_hop = max_hops.saturating_sub(state.path.len() + 1);
 
-        for edge in self.graph.graph().edges(state.node) {
-            let next_node = edge.target();
-            let Some(next_token) = self.graph.node_token(next_node) else {
-                continue;
-            };
-            let Some(current_token) = self.graph.node_token(state.node) else {
-                continue;
-            };
-            let pool = edge.weight().pool.clone();
+        for edge in self.graph.outgoing_edges(state.node) {
+            let next_node = edge.target;
+            let next_token = edge.token_out;
+            let current_token = edge.token_in;
+            let pool = edge.pool.clone();
 
             if state.used_pools.contains(&pool) {
                 continue;
@@ -3689,6 +3716,7 @@ impl<'a> AmmSearcher<'a> {
             heuristic,
             liquidity_config,
             quote_cache,
+            run_cache,
         )
     }
 
@@ -3700,6 +3728,7 @@ impl<'a> AmmSearcher<'a> {
         heuristic: HeuristicSearchConfig,
         liquidity_config: LiquidityPruningConfig,
         quote_cache: &SharedQuoteCache,
+        run_cache: &mut HeuristicRunCache,
     ) -> Vec<HeuristicHopGroup> {
         let mut stats = LiquidityPruneStats::default();
         let mut groups = grouped
@@ -3717,7 +3746,7 @@ impl<'a> AmmSearcher<'a> {
                 let degree = self
                     .graph
                     .node_index(&next_token)
-                    .map_or(0, |node| self.token_degree(node));
+                    .map_or(0, |node| self.token_degree_cached(node, run_cache));
                 (
                     HeuristicHopGroup {
                         next_token,
@@ -4062,8 +4091,8 @@ impl<'a> AmmSearcher<'a> {
                 continue;
             }
 
-            for edge in self.graph.graph().edges(node) {
-                let next_node = edge.target();
+            for edge in self.graph.outgoing_edges(node) {
+                let next_node = edge.target;
                 let next_depth = depth + 1;
                 if next_depth > max_hops {
                     continue;
@@ -4071,7 +4100,7 @@ impl<'a> AmmSearcher<'a> {
 
                 if next_node == target {
                     match liquidity_index
-                        .balance_state(&edge.weight().pool, target_token)
+                        .balance_state(&edge.pool, target_token)
                         .fresh()
                     {
                         Some(balance) => {
@@ -4102,15 +4131,13 @@ impl<'a> AmmSearcher<'a> {
         allow_final_source_revisit: bool,
     ) -> HashSet<PoolKey> {
         let mut blocked = HashSet::new();
-        for edge in self.graph.graph().edges(node) {
-            let pool = &edge.weight().pool;
+        for edge in self.graph.outgoing_edges(node) {
+            let pool = &edge.pool;
             if !used_pools.contains(pool) {
                 continue;
             }
-            let next_node = edge.target();
-            let Some(next_token) = self.graph.node_token(next_node) else {
-                continue;
-            };
+            let next_node = edge.target;
+            let next_token = edge.token_out;
             let closes_target = next_node == target;
             let closes_source_cycle =
                 allow_final_source_revisit && source == target && next_node == source;
@@ -4176,12 +4203,10 @@ impl<'a> AmmSearcher<'a> {
         remaining_hops: usize,
         allow_final_source_revisit: bool,
     ) -> bool {
-        for edge in self.graph.graph().edges(node) {
-            let next_node = edge.target();
-            let Some(next_token) = self.graph.node_token(next_node) else {
-                continue;
-            };
-            let pool = &edge.weight().pool;
+        for edge in self.graph.outgoing_edges(node) {
+            let next_node = edge.target;
+            let next_token = edge.token_out;
+            let pool = &edge.pool;
 
             if used_pools.contains(pool) {
                 continue;
@@ -4244,11 +4269,12 @@ impl<'a> AmmSearcher<'a> {
         token_out: Address,
         config: &SearchConfig,
         heuristic: HeuristicSearchConfig,
+        run_cache: &mut HeuristicRunCache,
     ) -> Option<HashSet<Address>> {
         if let Some(tokens) = &config.connector_tokens {
             return Some(tokens.clone());
         }
-        Some(self.auto_connector_tokens(token_in, token_out, heuristic))
+        Some(self.auto_connector_tokens(token_in, token_out, heuristic, run_cache))
     }
 
     fn auto_connector_tokens(
@@ -4256,6 +4282,7 @@ impl<'a> AmmSearcher<'a> {
         token_in: Address,
         token_out: Address,
         heuristic: HeuristicSearchConfig,
+        run_cache: &mut HeuristicRunCache,
     ) -> HashSet<Address> {
         if heuristic.max_auto_connectors == 0 {
             return HashSet::new();
@@ -4270,7 +4297,7 @@ impl<'a> AmmSearcher<'a> {
                 if token == token_in || token == token_out {
                     return None;
                 }
-                let degree = self.token_degree(node);
+                let degree = self.token_degree_cached(node, run_cache);
                 (degree >= heuristic.min_auto_connector_degree).then_some((degree, token))
             })
             .collect::<Vec<_>>();
@@ -4297,6 +4324,19 @@ impl<'a> AmmSearcher<'a> {
                 .graph()
                 .edges_directed(node, Direction::Outgoing)
                 .count()
+    }
+
+    fn token_degree_cached(
+        &self,
+        node: petgraph::graph::NodeIndex,
+        run_cache: &mut HeuristicRunCache,
+    ) -> usize {
+        if let Some(degree) = run_cache.token_degrees.get(&node).copied() {
+            return degree;
+        }
+        let degree = self.token_degree(node);
+        run_cache.token_degrees.insert(node, degree);
+        degree
     }
 
     fn quote_and_rank_parallel(
@@ -4554,19 +4594,15 @@ impl<'a> AmmSearcher<'a> {
                 continue;
             }
 
-            for edge in self.graph.graph().edges(state.node) {
+            for edge in self.graph.outgoing_edges(state.node) {
                 if should_continue.is_some_and(|should_continue| !should_continue()) {
                     stopped = true;
                     break 'search;
                 }
-                let next_node = edge.target();
-                let Some(next_token) = self.graph.node_token(next_node) else {
-                    continue;
-                };
-                let Some(current_token) = self.graph.node_token(state.node) else {
-                    continue;
-                };
-                let pool = edge.weight().pool.clone();
+                let next_node = edge.target;
+                let next_token = edge.token_out;
+                let current_token = edge.token_in;
+                let pool = edge.pool.clone();
 
                 if state.used_pools.contains(&pool) {
                     continue;
@@ -5423,6 +5459,12 @@ struct ConnectorScore {
     log_sum: usize,
 }
 
+#[derive(Debug, Default)]
+struct HeuristicRunCache {
+    token_degrees: HashMap<petgraph::graph::NodeIndex, usize>,
+    connector_scores: HashMap<Address, ConnectorScore>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UpperBoundCap {
     Known(U256),
@@ -5965,14 +6007,11 @@ fn index_probe_paths_for_route(
         let Some(node) = searcher.graph.node_index(&hop.token_in) else {
             continue;
         };
-        for edge in searcher.graph.graph().edges(node) {
-            let Some(next_token) = searcher.graph.node_token(edge.target()) else {
-                continue;
-            };
-            if next_token != hop.token_out {
+        for edge in searcher.graph.outgoing_edges(node) {
+            if edge.token_out != hop.token_out {
                 continue;
             }
-            let replacement_pool = edge.weight().pool.clone();
+            let replacement_pool = edge.pool.clone();
             if replacement_pool == hop.pool {
                 continue;
             }
