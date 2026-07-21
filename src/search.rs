@@ -3434,6 +3434,7 @@ impl<'a> AmmSearcher<'a> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn fast_lane_paths(
         &self,
         token_in: Address,
@@ -3535,10 +3536,8 @@ impl<'a> AmmSearcher<'a> {
             .graph
             .outgoing_edges(node)
             .iter()
-            .filter_map(|edge| {
-                (edge.token_out == token_out)
-                    .then(|| Hop::new(edge.pool.clone(), edge.token_in, edge.token_out))
-            })
+            .filter(|edge| edge.token_out == token_out)
+            .map(|edge| Hop::new(edge.pool.clone(), edge.token_in, edge.token_out))
             .collect::<Vec<_>>();
         self.liquidity_ranked_hops(
             hops,
@@ -3720,6 +3719,7 @@ impl<'a> AmmSearcher<'a> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn sorted_heuristic_hop_groups(
         &self,
         grouped: HashMap<Address, Vec<Hop>>,

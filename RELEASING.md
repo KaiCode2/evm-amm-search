@@ -5,7 +5,7 @@ Release candidates are published in dependency order:
 1. `alloy-transport-balancer 0.2.0`;
 2. `evm-fork-cache 0.3.0`;
 3. `evm-amm-state 0.2.0`;
-4. `evm-amm-search 0.1.0`.
+4. `evm-amm-search 0.1.1`.
 
 Local development keeps versioned path dependencies. Cargo removes the paths
 from the packaged manifest and resolves the stated crates.io versions.

@@ -127,17 +127,31 @@ mock adapter returning deterministic quotes
 debug-profile tests with debug info disabled
 ```
 
-Results on the local development machine:
+Two optimization rounds were measured on the local development machine. Round
+one added the request-local connector-score and token-degree caches. Round two
+started from that implementation and added the parity-preserving outgoing-edge
+cache.
 
-| Version | Best | Average |
+| Measurement | Best | Average |
 | --- | ---: | ---: |
-| Before cached outgoing-edge view | `4.35ms` | `5.87ms` |
-| After cached outgoing-edge view | `4.27ms` | `4.63ms` |
+| Round 1 baseline | `15.03ms` | `19.78ms` |
+| Round 1 after request-local caches | `3.54ms` | `4.55ms` |
+| Round 1 confirmation run | `3.52ms` | `3.79ms` |
+| Round 2 fresh baseline | `4.35ms` | `5.87ms` |
+| Round 2 after cached outgoing edges | `4.27ms` | `4.63ms` |
 
-The best case was effectively flat, while average scheduler time improved by
-about `21%`. This probe intentionally excludes RPC, cold start, real EVM
-execution, and provider variance. Treat it as a low-level scheduler regression
-check, not as an end-to-end routing benchmark.
+Round one reduced average scheduler time by `77.0%` on its first post-change run
+and `80.8%` on its confirmation run. Round two's fresh before/after comparison
+reduced average time by another `21.1%`; its best case was effectively flat.
+Comparing the initial baseline with the final parity-preserving result gives a
+conservative `76.6%` average reduction, or `4.27x` faster overall. The small
+spread between the round-one confirmation and round-two baseline is normal
+debug-profile timing variance, which is why each optimization is also reported
+against the baseline captured immediately before it.
+
+This probe intentionally excludes RPC, cold start, real EVM execution, and
+provider variance. Treat it as a low-level scheduler regression check, not as
+an end-to-end routing benchmark.
 
 The end-to-end route benchmarks in the README remain the better source for user
 latency because they include realistic graph construction, liquidity refresh,

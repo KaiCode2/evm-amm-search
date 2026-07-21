@@ -5,6 +5,26 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-21
+
+### Changed
+
+- Heuristic searches now cache token degree and connector-liquidity scores for
+  the duration of one request, avoiding repeated centrality work without
+  retaining stale state across searches.
+- `AmmGraph` now maintains a synchronized outgoing-edge view used by route
+  expansion, reachability checks, upper-bound pruning, exhaustive enumeration,
+  and incremental replacement probes.
+- Search internals and their memory/performance tradeoffs are documented in a
+  dedicated performance model.
+
+### Performance
+
+- The synthetic warm scheduler probe improved from an initial `19.78ms`
+  average to `4.63ms` in the final parity-preserving implementation, a `76.6%`
+  reduction (`4.27x` faster). The final adjacency-cache round independently
+  reduced its fresh baseline from `5.87ms` to `4.63ms` (`21.1%`).
+
 ## [0.1.0] - 2026-07-14
 
 ### Added
@@ -112,5 +132,6 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 - Benchmark failure observers now survive receiver lag and report skipped-event
   counts instead of silently returning a false zero-failure summary.
 
-[Unreleased]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/KaiCode2/evm-amm-search/releases/tag/v0.1.0

@@ -259,6 +259,8 @@ The memory tradeoff is one small cached record per directed graph edge plus a
 short-lived per-request map for touched tokens/connectors. See
 [`docs/search-performance-model.md`](docs/search-performance-model.md) for the
 implementation notes, safety boundaries, and scheduler-only benchmark results.
+Across both measured optimization rounds, the synthetic warm scheduler average
+fell from `19.78ms` to `4.63ms`, a `76.6%` reduction (`4.27x` faster).
 
 ### Cache Setup
 
