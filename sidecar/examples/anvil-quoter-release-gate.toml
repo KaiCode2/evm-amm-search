@@ -1,0 +1,94 @@
+# Deterministic local-chain profile used by quoter-hardening-anvil.sh. The
+# canonical websocket and the independent state endpoint are both routed
+# through Toxiproxy so the release gate can fail them separately.
+extends = "ethereum-mainnet"
+replace_tokens = true
+replace_factories = true
+replace_pools = true
+
+[server]
+listen = "${ANVIL_SIDECAR_LISTEN}"
+max_in_flight_quotes = 32
+admin_bearer_token = "${AMM_ROUTE_ADMIN_TOKEN}"
+
+[chain]
+expected_chain_id = 31337
+v2_router = "0x0000000000000000000000000000000000000200"
+v3_quoter = "0x0000000000000000000000000000000000000201"
+
+[rpc]
+canonical_ws = "${ANVIL_PROXY_WS_URL}"
+canonical_ws_fallbacks = [
+  "${ANVIL_FALLBACK_PROXY_WS_URL}",
+  "${ANVIL_INVALID_WS_URL}",
+]
+canonical_max_stale_secs = 15
+canonical_health_check_interval_ms = 250
+canonical_reconnect_initial_delay_ms = 250
+canonical_reconnect_max_delay_ms = 2000
+canonical_rebuild_timeout_secs = 120
+canonical_transport_max_retries = 20
+canonical_transport_retry_interval_ms = 500
+canonical_stream_reconnect_retry_delay_ms = 250
+canonical_stream_reconnect_max_delay_ms = 2000
+canonical_stream_dedupe_window = 4096
+batch_size = 25
+cold_start_concurrency = 2
+point_read_slots_per_batch = 50
+point_read_concurrency = 2
+bulk_max_concurrent_calls = 1
+
+[[rpc.state]]
+url = "${ANVIL_STATE_RPC_URL}"
+weight = 100
+max_in_flight = 32
+
+[routing]
+default_quality = "balanced"
+default_max_hops = 3
+default_top_k = 1
+default_timeout_ms = 5000
+max_hops = 4
+max_top_k = 5
+max_timeout_ms = 15000
+max_candidates = 50000
+allow_exhaustive = true
+route_worker_threads = 4
+max_subscriptions = 128
+
+[discovery]
+quote_default = "off"
+max_startup_pools = 4
+max_concurrent_requests = 2
+negative_ttl_secs = 30
+
+[[tokens]]
+symbol = "TOKEN0"
+address = "0x0000000000000000000000000000000000000011"
+decimals = 18
+connector = true
+
+[[tokens]]
+symbol = "TOKEN1"
+address = "0x0000000000000000000000000000000000000022"
+decimals = 18
+connector = true
+
+[[factories]]
+name = "local-uniswap-v2"
+protocol = "uniswap-v2"
+address = "0x0000000000000000000000000000000000000300"
+fee_bps = 30
+get_pair_base_slot = "3"
+
+[[pools]]
+protocol = "uniswap_v2"
+address = "0x0000000000000000000000000000000000000100"
+tokens = [
+  "0x0000000000000000000000000000000000000011",
+  "0x0000000000000000000000000000000000000022",
+]
+fee_bps = 30
+
+[executor]
+enabled = false

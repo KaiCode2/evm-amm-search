@@ -24,7 +24,28 @@ if [[ "$healthcheck" != *"/readyz"* ]]; then
   exit 1
 fi
 
+image_version=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$image_id")
+source_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image_id")
+image_license=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.licenses"}}' "$image_id")
+if [[ -z "$image_version" || "$image_version" == "<no value>" ]]; then
+  echo "container image has no OCI version label" >&2
+  exit 1
+fi
+if [[ -z "$source_revision" || "$source_revision" == "unknown" || "$source_revision" == "<no value>" ]]; then
+  echo "container image has no concrete OCI source revision" >&2
+  exit 1
+fi
+if [[ "$image_license" != "MIT OR Apache-2.0" ]]; then
+  echo "container image has unexpected OCI license: $image_license" >&2
+  exit 1
+fi
+
 docker run --rm "$image" --help | grep -Fq -- '--check-config'
+version_output=$(docker run --rm "$image" --version)
+if [[ "$version_output" != "evm-amm-route-sidecar $image_version" ]]; then
+  echo "container binary version does not match OCI label: $version_output != $image_version" >&2
+  exit 1
+fi
 
 docker run --rm \
   --read-only \

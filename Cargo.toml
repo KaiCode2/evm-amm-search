@@ -10,7 +10,19 @@ categories = ["cryptography::cryptocurrencies", "simulation"]
 readme = "README.md"
 repository = "https://github.com/KaiCode2/evm-amm-search"
 documentation = "https://docs.rs/evm-amm-search"
-exclude = ["sidecar"]
+exclude = [
+    ".dockerignore",
+    ".github",
+    "contracts/ExperimentalExecutorRouter.sol",
+    "contracts/ExperimentalExecutorRouterFactory.sol",
+    "contracts/README.md",
+    "contracts/test",
+    "foundry.toml",
+    "script",
+    "sidecar",
+    "sidecar-*-evidence.json",
+    "test",
+]
 
 [package.metadata.docs.rs]
 all-features = true

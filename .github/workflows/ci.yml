@@ -87,6 +87,13 @@ jobs:
           # RELEASING.md for the command that verifies it is not in the graph.
           ignore: RUSTSEC-2025-0055
 
+      - name: Sidecar security audit
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: evm-amm-search/sidecar
+          ignore: RUSTSEC-2025-0055
+
   msrv:
     name: msrv (1.88)
     runs-on: ubuntu-latest
@@ -119,23 +126,103 @@ jobs:
 
       - run: cargo check --locked --manifest-path sidecar/Cargo.toml
 
-  sidecar-container:
-    name: sidecar container smoke
+  executor-contracts:
+    name: executor contracts
     runs-on: ubuntu-latest
-    needs: check
     steps:
       - uses: actions/checkout@v4
         with:
           path: evm-amm-search
 
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Solidity formatting
+        run: >-
+          forge fmt --check
+          contracts/ExperimentalExecutorRouter.sol
+          contracts/ExperimentalExecutorRouterFactory.sol
+          contracts/test/LocalV2Quoter.sol
+          script/DeployExperimentalExecutor.s.sol
+          test/ExperimentalExecutorRouter.t.sol
+          test/ExperimentalExecutorRouterFork.t.sol
+
+      - name: Solidity build and size limits
+        run: forge build --sizes
+
+      - name: Solidity tests
+        run: forge test --no-match-contract ExperimentalExecutorRouterForkTest -vv
+
+      - name: Solidity lint
+        run: forge lint
+
+  sidecar-container:
+    name: sidecar release image
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [check, executor-contracts]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: evm-amm-search
+
+      - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: stable
+
       - name: Validate sidecar Compose profile
-        run: docker compose -f sidecar/compose.yaml config --quiet
+        run: |
+          docker compose -f sidecar/compose.yaml config --quiet
+          docker compose -f sidecar/compose.release.yaml config --quiet
         env:
           ETHEREUM_WS_URL: wss://rpc.example.invalid
           AMM_ROUTE_ADMIN_TOKEN: compose-validation-only
+          AMM_ROUTE_IMAGE: ghcr.io/kaicode2/evm-amm-route-sidecar:validation-only
 
-      - name: Build sidecar image
-        run: docker build -f sidecar/Dockerfile -t evm-amm-route-sidecar:ci .
+      - name: Build exact release image
+        run: |
+          mkdir -p artifacts
+          sidecar/scripts/build-release-image.sh \
+            evm-amm-route-sidecar:ci \
+            artifacts/release-image.json
 
       - name: Smoke sidecar image
         run: sidecar/scripts/smoke-container.sh evm-amm-route-sidecar:ci
+
+      - name: Parallel load and recovery gate
+        run: |
+          set -o pipefail
+          QUOTER_SIDECAR_IMAGE=evm-amm-route-sidecar:ci \
+          QUOTER_LOAD_REQUESTS=64 \
+          QUOTER_LOAD_CONCURRENCY=16 \
+          QUOTER_LONG_OUTAGE_SECONDS=40 \
+          QUOTER_EVIDENCE_JSON=artifacts/quoter-release-gate.json \
+          sidecar/scripts/quoter-hardening-anvil.sh 2>&1 \
+            | tee artifacts/quoter-release-gate.log
+
+      - name: Generate image SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: evm-amm-route-sidecar:ci
+          format: spdx-json
+          output-file: evm-amm-search/artifacts/sidecar.spdx.json
+          upload-artifact: false
+
+      - name: Scan image for fixed critical vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: evm-amm-route-sidecar:ci
+          format: table
+          output: evm-amm-search/artifacts/trivy.txt
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sidecar-release-evidence
+          path: evm-amm-search/artifacts
+          if-no-files-found: error

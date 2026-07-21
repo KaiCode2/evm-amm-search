@@ -7,4 +7,16 @@
 pub mod api;
 pub mod config;
 pub mod coverage;
+pub mod execution;
+pub mod graph_index;
 pub mod node;
+
+/// Sidecar package version embedded by Cargo.
+pub const SERVICE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Source revision embedded by the release builder, or `unknown` for ordinary
+/// local Cargo builds.
+pub const SOURCE_REVISION: &str = match option_env!("EVM_AMM_ROUTE_SOURCE_REVISION") {
+    Some(revision) => revision,
+    None => "unknown",
+};

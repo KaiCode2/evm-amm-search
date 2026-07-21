@@ -28,6 +28,19 @@ bounded REST API, including quote-time discovery and explicit token prewarming.
 It is deliberately excluded from the library's public API and crates.io package;
 see the sidecar README for its supported boundary and release status.
 
+An initial, separately documented
+[`ExperimentalExecutorRouter`](https://github.com/KaiCode2/evm-amm-search/blob/main/contracts/README.md)
+contract demonstrates
+exact-input execution for every currently routable protocol family, atomic
+ERC-2612/Permit2 authorization, native-input wrapping, final-output protection,
+and reusable CREATE2 deployment. It is unaudited, unstable, and not intended
+for production or meaningful-value use. The sidecar exposes an explicitly
+disabled-by-default executable-quote endpoint that performs snapshot-bound
+quote-to-calldata translation, canonical source-block verification, stale-state
+rejection, gas estimation, structured approval generation, protocol gating, and
+the second-best-executable-route default minimum. It never signs or submits
+transactions.
+
 ## Example
 
 ```rust,no_run

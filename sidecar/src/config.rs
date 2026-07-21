@@ -17,6 +17,7 @@ pub struct SidecarConfig {
     pub storage: StorageConfig,
     pub routing: RoutingConfig,
     pub discovery: DiscoveryConfig,
+    pub executor: ExecutorConfig,
     pub tokens: Vec<TokenConfig>,
     pub factories: Vec<FactoryConfig>,
     pub pools: Vec<PoolConfig>,
@@ -42,6 +43,19 @@ pub struct ChainConfig {
 #[derive(Clone, Debug)]
 pub struct RpcConfig {
     pub canonical_ws: String,
+    pub canonical_ws_fallbacks: Vec<String>,
+    pub canonical_max_stale: Duration,
+    pub canonical_health_check_interval: Duration,
+    pub canonical_reconnect_initial_delay: Duration,
+    pub canonical_reconnect_max_delay: Duration,
+    pub canonical_rebuild_timeout: Duration,
+    pub canonical_transport_max_retries: u32,
+    pub canonical_transport_retry_interval: Duration,
+    pub canonical_stream_reconnect_initial_delay: Duration,
+    pub canonical_stream_reconnect_retry_delay: Duration,
+    pub canonical_stream_reconnect_max_delay: Duration,
+    pub canonical_stream_reconnect_max_attempts: Option<usize>,
+    pub canonical_stream_dedupe_window: usize,
     pub state: Vec<RpcEndpointConfig>,
     pub batch_size: usize,
     pub cold_start_concurrency: usize,
@@ -108,6 +122,22 @@ pub struct DiscoveryConfig {
     pub negative_ttl: Duration,
 }
 
+#[derive(Clone, Debug)]
+pub struct ExecutorConfig {
+    pub enabled: bool,
+    pub router: Address,
+    pub weth: Address,
+    pub permit2: Address,
+    pub expected_runtime_code_hash: Option<B256>,
+    pub allowed_protocols: Vec<String>,
+    pub default_deadline: Duration,
+    pub max_deadline: Duration,
+    pub max_snapshot_age: Duration,
+    pub max_slippage_bps: u16,
+    pub max_in_flight_simulations: usize,
+    pub simulation_timeout: Duration,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TokenConfig {
     pub symbol: String,
@@ -159,6 +189,14 @@ pub struct PoolConfig {
     pub variant: Option<String>,
     pub factory: Option<String>,
     pub quoter: Option<String>,
+    pub tick_spacing: Option<i32>,
+    pub stable: Option<bool>,
+    pub pool_id: Option<String>,
+    pub vault: Option<String>,
+    pub reserve0_slot: Option<String>,
+    pub reserve1_slot: Option<String>,
+    pub token0_slot: Option<String>,
+    pub token1_slot: Option<String>,
     #[serde(default)]
     pub discovered_slots: Vec<String>,
     #[serde(default = "default_true")]
@@ -186,6 +224,7 @@ struct RawConfig {
     storage: Option<StorageOverrides>,
     routing: Option<RoutingOverrides>,
     discovery: Option<DiscoveryOverrides>,
+    executor: Option<ExecutorOverrides>,
     #[serde(default)]
     tokens: Vec<TokenConfig>,
     #[serde(default)]
@@ -213,6 +252,19 @@ struct ChainOverrides {
 #[derive(Default, Deserialize)]
 struct RpcOverrides {
     canonical_ws: Option<String>,
+    canonical_ws_fallbacks: Option<Vec<String>>,
+    canonical_max_stale_secs: Option<u64>,
+    canonical_health_check_interval_ms: Option<u64>,
+    canonical_reconnect_initial_delay_ms: Option<u64>,
+    canonical_reconnect_max_delay_ms: Option<u64>,
+    canonical_rebuild_timeout_secs: Option<u64>,
+    canonical_transport_max_retries: Option<u32>,
+    canonical_transport_retry_interval_ms: Option<u64>,
+    canonical_stream_reconnect_initial_delay_ms: Option<u64>,
+    canonical_stream_reconnect_retry_delay_ms: Option<u64>,
+    canonical_stream_reconnect_max_delay_ms: Option<u64>,
+    canonical_stream_reconnect_max_attempts: Option<usize>,
+    canonical_stream_dedupe_window: Option<usize>,
     state: Option<Vec<RpcEndpointConfig>>,
     batch_size: Option<usize>,
     cold_start_concurrency: Option<usize>,
@@ -252,6 +304,22 @@ struct DiscoveryOverrides {
     max_startup_pools: Option<usize>,
     max_concurrent_requests: Option<usize>,
     negative_ttl_secs: Option<u64>,
+}
+
+#[derive(Default, Deserialize)]
+struct ExecutorOverrides {
+    enabled: Option<bool>,
+    router: Option<String>,
+    weth: Option<String>,
+    permit2: Option<String>,
+    expected_runtime_code_hash: Option<String>,
+    allowed_protocols: Option<Vec<String>>,
+    default_deadline_secs: Option<u64>,
+    max_deadline_secs: Option<u64>,
+    max_snapshot_age_secs: Option<u64>,
+    max_slippage_bps: Option<u16>,
+    max_in_flight_simulations: Option<usize>,
+    simulation_timeout_ms: Option<u64>,
 }
 
 impl SidecarConfig {
@@ -300,6 +368,19 @@ impl SidecarConfig {
             },
             rpc: RpcConfig {
                 canonical_ws: String::new(),
+                canonical_ws_fallbacks: Vec::new(),
+                canonical_max_stale: Duration::from_secs(45),
+                canonical_health_check_interval: Duration::from_secs(1),
+                canonical_reconnect_initial_delay: Duration::from_millis(250),
+                canonical_reconnect_max_delay: Duration::from_secs(30),
+                canonical_rebuild_timeout: Duration::from_secs(240),
+                canonical_transport_max_retries: 10,
+                canonical_transport_retry_interval: Duration::from_secs(3),
+                canonical_stream_reconnect_initial_delay: Duration::ZERO,
+                canonical_stream_reconnect_retry_delay: Duration::from_millis(250),
+                canonical_stream_reconnect_max_delay: Duration::from_secs(30),
+                canonical_stream_reconnect_max_attempts: None,
+                canonical_stream_dedupe_window: 4_096,
                 state: Vec::new(),
                 batch_size: 150,
                 cold_start_concurrency: 16,
@@ -333,6 +414,25 @@ impl SidecarConfig {
                 max_startup_pools: 128,
                 max_concurrent_requests: 8,
                 negative_ttl: Duration::from_secs(300),
+            },
+            executor: ExecutorConfig {
+                enabled: false,
+                router: Address::ZERO,
+                weth: Address::ZERO,
+                permit2: Address::ZERO,
+                expected_runtime_code_hash: None,
+                allowed_protocols: vec![
+                    "uniswap_v2".to_owned(),
+                    "uniswap_v3".to_owned(),
+                    "pancake_v3".to_owned(),
+                    "curve".to_owned(),
+                ],
+                default_deadline: Duration::from_secs(120),
+                max_deadline: Duration::from_secs(600),
+                max_snapshot_age: Duration::from_secs(60),
+                max_slippage_bps: 500,
+                max_in_flight_simulations: 8,
+                simulation_timeout: Duration::from_millis(3_000),
             },
             tokens: Vec::new(),
             factories: Vec::new(),
@@ -442,6 +542,47 @@ impl SidecarConfig {
         }
         if let Some(rpc) = raw.rpc {
             set_if_some(&mut self.rpc.canonical_ws, rpc.canonical_ws);
+            if let Some(fallbacks) = rpc.canonical_ws_fallbacks {
+                self.rpc.canonical_ws_fallbacks = fallbacks;
+            }
+            if let Some(secs) = rpc.canonical_max_stale_secs {
+                self.rpc.canonical_max_stale = Duration::from_secs(secs);
+            }
+            if let Some(ms) = rpc.canonical_health_check_interval_ms {
+                self.rpc.canonical_health_check_interval = Duration::from_millis(ms);
+            }
+            if let Some(ms) = rpc.canonical_reconnect_initial_delay_ms {
+                self.rpc.canonical_reconnect_initial_delay = Duration::from_millis(ms);
+            }
+            if let Some(ms) = rpc.canonical_reconnect_max_delay_ms {
+                self.rpc.canonical_reconnect_max_delay = Duration::from_millis(ms);
+            }
+            if let Some(secs) = rpc.canonical_rebuild_timeout_secs {
+                self.rpc.canonical_rebuild_timeout = Duration::from_secs(secs);
+            }
+            set_if_some(
+                &mut self.rpc.canonical_transport_max_retries,
+                rpc.canonical_transport_max_retries,
+            );
+            if let Some(ms) = rpc.canonical_transport_retry_interval_ms {
+                self.rpc.canonical_transport_retry_interval = Duration::from_millis(ms);
+            }
+            if let Some(ms) = rpc.canonical_stream_reconnect_initial_delay_ms {
+                self.rpc.canonical_stream_reconnect_initial_delay = Duration::from_millis(ms);
+            }
+            if let Some(ms) = rpc.canonical_stream_reconnect_retry_delay_ms {
+                self.rpc.canonical_stream_reconnect_retry_delay = Duration::from_millis(ms);
+            }
+            if let Some(ms) = rpc.canonical_stream_reconnect_max_delay_ms {
+                self.rpc.canonical_stream_reconnect_max_delay = Duration::from_millis(ms);
+            }
+            if let Some(attempts) = rpc.canonical_stream_reconnect_max_attempts {
+                self.rpc.canonical_stream_reconnect_max_attempts = Some(attempts);
+            }
+            set_if_some(
+                &mut self.rpc.canonical_stream_dedupe_window,
+                rpc.canonical_stream_dedupe_window,
+            );
             if let Some(state) = rpc.state {
                 self.rpc.state = state;
             }
@@ -520,6 +661,49 @@ impl SidecarConfig {
                 self.discovery.negative_ttl = Duration::from_secs(secs);
             }
         }
+        if let Some(executor) = raw.executor {
+            set_if_some(&mut self.executor.enabled, executor.enabled);
+            if let Some(router) = executor.router {
+                self.executor.router = parse_address(&router).context("executor.router")?;
+            }
+            if let Some(weth) = executor.weth {
+                self.executor.weth = parse_address(&weth).context("executor.weth")?;
+            }
+            if let Some(permit2) = executor.permit2 {
+                self.executor.permit2 = parse_address(&permit2).context("executor.permit2")?;
+            }
+            if let Some(code_hash) = executor.expected_runtime_code_hash {
+                self.executor.expected_runtime_code_hash = Some(
+                    B256::from_str(&code_hash).context("executor.expected_runtime_code_hash")?,
+                );
+            }
+            if let Some(protocols) = executor.allowed_protocols {
+                self.executor.allowed_protocols = protocols
+                    .into_iter()
+                    .map(|protocol| normalize_executor_protocol(&protocol).map(str::to_owned))
+                    .collect::<Result<Vec<_>>>()?;
+            }
+            if let Some(secs) = executor.default_deadline_secs {
+                self.executor.default_deadline = Duration::from_secs(secs);
+            }
+            if let Some(secs) = executor.max_deadline_secs {
+                self.executor.max_deadline = Duration::from_secs(secs);
+            }
+            if let Some(secs) = executor.max_snapshot_age_secs {
+                self.executor.max_snapshot_age = Duration::from_secs(secs);
+            }
+            set_if_some(
+                &mut self.executor.max_slippage_bps,
+                executor.max_slippage_bps,
+            );
+            set_if_some(
+                &mut self.executor.max_in_flight_simulations,
+                executor.max_in_flight_simulations,
+            );
+            if let Some(ms) = executor.simulation_timeout_ms {
+                self.executor.simulation_timeout = Duration::from_millis(ms);
+            }
+        }
 
         merge_items(&mut self.tokens, raw.tokens, raw.replace_tokens, |item| {
             item.address.to_ascii_lowercase()
@@ -570,6 +754,43 @@ impl SidecarConfig {
             bail!("chain.expected_chain_id must be non-zero");
         }
         validate_url(&self.rpc.canonical_ws, &["ws", "wss"], "rpc.canonical_ws")?;
+        let mut canonical_endpoints = HashSet::new();
+        canonical_endpoints.insert(self.rpc.canonical_ws.as_str());
+        for endpoint in &self.rpc.canonical_ws_fallbacks {
+            validate_url(endpoint, &["ws", "wss"], "rpc.canonical_ws_fallbacks")?;
+            if !canonical_endpoints.insert(endpoint.as_str()) {
+                bail!("canonical websocket endpoints must be unique");
+            }
+        }
+        if self.rpc.canonical_max_stale.is_zero()
+            || self.rpc.canonical_health_check_interval.is_zero()
+            || self.rpc.canonical_reconnect_initial_delay.is_zero()
+            || self.rpc.canonical_reconnect_max_delay.is_zero()
+            || self.rpc.canonical_rebuild_timeout.is_zero()
+        {
+            bail!("canonical websocket recovery bounds must be non-zero");
+        }
+        if self.rpc.canonical_reconnect_initial_delay > self.rpc.canonical_reconnect_max_delay {
+            bail!(
+                "rpc.canonical_reconnect_initial_delay_ms must not exceed rpc.canonical_reconnect_max_delay_ms"
+            );
+        }
+        if self.rpc.canonical_transport_max_retries == 0
+            || self.rpc.canonical_transport_retry_interval.is_zero()
+            || self.rpc.canonical_stream_reconnect_retry_delay.is_zero()
+            || self.rpc.canonical_stream_reconnect_max_delay.is_zero()
+            || self.rpc.canonical_stream_dedupe_window == 0
+            || self.rpc.canonical_stream_reconnect_max_attempts == Some(0)
+        {
+            bail!("canonical websocket transport and stream recovery bounds must be non-zero");
+        }
+        if self.rpc.canonical_stream_reconnect_retry_delay
+            > self.rpc.canonical_stream_reconnect_max_delay
+        {
+            bail!(
+                "rpc.canonical_stream_reconnect_retry_delay_ms must not exceed rpc.canonical_stream_reconnect_max_delay_ms"
+            );
+        }
         if [
             self.rpc.batch_size,
             self.rpc.cold_start_concurrency,
@@ -610,7 +831,8 @@ impl SidecarConfig {
         for factory in &self.factories {
             factory.parsed_address()?;
             match factory.normalized_protocol().as_str() {
-                "uniswap-v2" | "uniswap-v3" | "sushi-v3" | "pancake-v3" => {}
+                "uniswap-v2" | "uniswap-v3" | "sushi-v3" | "pancake-v3" | "slipstream"
+                | "aerodrome-v2" | "velodrome-v2" => {}
                 other => bail!("unsupported factory protocol {other}"),
             }
             if let Some(quoter) = &factory.quoter {
@@ -642,6 +864,23 @@ impl SidecarConfig {
             if let Some(quoter) = &pool.quoter {
                 parse_address(quoter).with_context(|| format!("pool {} quoter", pool.address))?;
             }
+            if let Some(vault) = &pool.vault {
+                parse_address(vault).with_context(|| format!("pool {} vault", pool.address))?;
+            }
+            if let Some(pool_id) = &pool.pool_id {
+                B256::from_str(pool_id)
+                    .with_context(|| format!("pool {} pool_id", pool.address))?;
+            }
+            for (label, slot) in [
+                ("reserve0_slot", &pool.reserve0_slot),
+                ("reserve1_slot", &pool.reserve1_slot),
+                ("token0_slot", &pool.token0_slot),
+                ("token1_slot", &pool.token1_slot),
+            ] {
+                if let Some(slot) = slot {
+                    parse_u256(slot).with_context(|| format!("pool {} {label}", pool.address))?;
+                }
+            }
             match pool.normalized_protocol().as_str() {
                 "uniswap_v2" | "sushiswap_v2" | "v2" => {
                     if !pool.tokens.is_empty() && pool.tokens.len() != 2 {
@@ -655,9 +894,79 @@ impl SidecarConfig {
                     if pool.fee.is_none() && pool.fee_bps.is_none() {
                         bail!("manual V3 pool {} must set fee", pool.address);
                     }
+                    if pool.tick_spacing.is_none_or(|spacing| spacing <= 0) {
+                        bail!(
+                            "manual V3 pool {} must set a positive tick_spacing",
+                            pool.address
+                        );
+                    }
                     if !pool.tokens.is_empty() && pool.tokens.len() != 2 {
                         bail!(
                             "manual V3 pool {} must list exactly two tokens",
+                            pool.address
+                        );
+                    }
+                }
+                "slipstream" | "aerodrome_cl" => {
+                    if pool.fee.is_none() && pool.fee_bps.is_none() {
+                        bail!("manual Slipstream pool {} must set fee", pool.address);
+                    }
+                    if pool.tick_spacing.is_none_or(|spacing| spacing <= 0) {
+                        bail!(
+                            "manual Slipstream pool {} must set a positive tick_spacing",
+                            pool.address
+                        );
+                    }
+                    if pool.quoter.is_none() {
+                        bail!(
+                            "manual Slipstream pool {} must set a compatible quoter",
+                            pool.address
+                        );
+                    }
+                    if pool.tokens.len() != 2 {
+                        bail!(
+                            "manual Slipstream pool {} must list exactly two tokens",
+                            pool.address
+                        );
+                    }
+                }
+                "solidly_v2" | "aerodrome_v2" | "velodrome_v2" => {
+                    if pool.tokens.len() != 2 {
+                        bail!(
+                            "manual Solidly V2 pool {} must list exactly two tokens",
+                            pool.address
+                        );
+                    }
+                    if pool.stable.is_none() {
+                        bail!("manual Solidly V2 pool {} must set stable", pool.address);
+                    }
+                    if pool.reserve0_slot.is_none()
+                        || pool.reserve1_slot.is_none()
+                        || pool.token0_slot.is_none()
+                        || pool.token1_slot.is_none()
+                    {
+                        bail!(
+                            "manual Solidly V2 pool {} must set all reserve and token storage slots",
+                            pool.address
+                        );
+                    }
+                }
+                "balancer_v2" => {
+                    if pool.tokens.len() < 2 {
+                        bail!(
+                            "manual Balancer V2 pool {} must list at least two tokens",
+                            pool.address
+                        );
+                    }
+                    if pool.pool_id.is_none() || pool.vault.is_none() {
+                        bail!(
+                            "manual Balancer V2 pool {} must set pool_id and vault",
+                            pool.address
+                        );
+                    }
+                    if pool.discovered_slots.is_empty() {
+                        bail!(
+                            "manual Balancer V2 pool {} must set discovered_slots",
                             pool.address
                         );
                     }
@@ -696,6 +1005,44 @@ impl SidecarConfig {
         if self.discovery.max_concurrent_requests == 0 {
             bail!("discovery.max_concurrent_requests must be non-zero");
         }
+        if self.executor.enabled
+            && (self.executor.router == Address::ZERO
+                || self.executor.weth == Address::ZERO
+                || self.executor.permit2 == Address::ZERO
+                || self
+                    .executor
+                    .expected_runtime_code_hash
+                    .is_none_or(|hash| hash == B256::ZERO))
+        {
+            bail!(
+                "enabled executor deployment requires non-zero router, WETH, Permit2, and expected runtime code hash"
+            );
+        }
+        if self.executor.max_slippage_bps >= 10_000 {
+            bail!("executor.max_slippage_bps must be below 10000");
+        }
+        let mut allowed_protocols = HashSet::new();
+        for protocol in &self.executor.allowed_protocols {
+            let normalized = normalize_executor_protocol(protocol)?;
+            if !allowed_protocols.insert(normalized) {
+                bail!("duplicate executor allowed protocol {normalized}");
+            }
+        }
+        if self.executor.enabled && allowed_protocols.is_empty() {
+            bail!("enabled executor requires at least one allowed protocol");
+        }
+        if self.executor.default_deadline.is_zero()
+            || self.executor.max_deadline.is_zero()
+            || self.executor.default_deadline > self.executor.max_deadline
+        {
+            bail!("executor deadline policy must be non-zero and default must not exceed max");
+        }
+        if self.executor.max_snapshot_age.is_zero()
+            || self.executor.max_in_flight_simulations == 0
+            || self.executor.simulation_timeout.is_zero()
+        {
+            bail!("executor snapshot and simulation bounds must be non-zero");
+        }
         Ok(())
     }
 
@@ -717,6 +1064,35 @@ impl SidecarConfig {
             .filter(|token| token.connector)
             .map(TokenConfig::parsed_address)
             .collect()
+    }
+
+    /// Ordered canonical websocket endpoints used for startup and recovery.
+    pub fn canonical_ws_endpoints(&self) -> Vec<&str> {
+        std::iter::once(self.rpc.canonical_ws.as_str())
+            .chain(self.rpc.canonical_ws_fallbacks.iter().map(String::as_str))
+            .collect()
+    }
+
+    pub fn executor_allows_protocol(&self, protocol: &str) -> bool {
+        normalize_executor_protocol(protocol).is_ok_and(|protocol| {
+            self.executor
+                .allowed_protocols
+                .iter()
+                .any(|allowed| allowed == protocol)
+        })
+    }
+}
+
+fn normalize_executor_protocol(value: &str) -> Result<&'static str> {
+    match value.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+        "uniswap_v2" | "sushiswap_v2" | "v2" => Ok("uniswap_v2"),
+        "uniswap_v3" | "sushi_v3" | "v3" => Ok("uniswap_v3"),
+        "pancake_v3" | "pancakeswap_v3" => Ok("pancake_v3"),
+        "slipstream" | "aerodrome_cl" => Ok("slipstream"),
+        "solidly_v2" | "aerodrome_v2" | "velodrome_v2" => Ok("solidly_v2"),
+        "balancer_v2" => Ok("balancer_v2"),
+        "curve" | "curve_stable" | "curve_crypto" | "curve_crypto_ng" => Ok("curve"),
+        protocol => bail!("unsupported executor protocol {protocol}"),
     }
 }
 
@@ -869,6 +1245,218 @@ mod tests {
     }
 
     #[test]
+    fn executable_quotes_are_disabled_by_default() {
+        let config = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+            "#,
+            |_| None,
+        )
+        .unwrap();
+
+        assert!(!config.executor.enabled);
+        assert!(!config.executor_allows_protocol("balancer_v2"));
+    }
+
+    #[test]
+    fn executable_quote_profile_resolves_deployment_and_policy() {
+        let config = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+                [executor]
+                enabled = true
+                router = "0x0000000000000000000000000000000000000044"
+                weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+                expected_runtime_code_hash = "0x1111111111111111111111111111111111111111111111111111111111111111"
+                allowed_protocols = ["uniswap-v2", "balancer_v2"]
+                default_deadline_secs = 120
+                max_deadline_secs = 600
+                max_snapshot_age_secs = 45
+                max_slippage_bps = 500
+                max_in_flight_simulations = 8
+                simulation_timeout_ms = 3000
+            "#,
+            |_| None,
+        )
+        .unwrap();
+
+        assert!(config.executor.enabled);
+        assert_eq!(
+            config.executor.router,
+            parse_address("0x0000000000000000000000000000000000000044").unwrap()
+        );
+        assert_eq!(config.executor.default_deadline, Duration::from_secs(120));
+        assert_eq!(config.executor.max_deadline, Duration::from_secs(600));
+        assert_eq!(config.executor.max_snapshot_age, Duration::from_secs(45));
+        assert_eq!(
+            config.executor.allowed_protocols,
+            ["uniswap_v2", "balancer_v2"]
+        );
+        assert!(config.executor_allows_protocol("v2"));
+        assert!(!config.executor_allows_protocol("curve"));
+        assert_eq!(config.executor.max_slippage_bps, 500);
+        assert_eq!(config.executor.max_in_flight_simulations, 8);
+        assert_eq!(
+            config.executor.simulation_timeout,
+            Duration::from_millis(3000)
+        );
+    }
+
+    #[test]
+    fn enabled_executor_requires_a_verified_deployment() {
+        let error = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+                [executor]
+                enabled = true
+            "#,
+            |_| None,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("executor deployment"));
+    }
+
+    #[test]
+    fn enabled_executor_requires_a_nonempty_supported_protocol_allowlist() {
+        let error = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+                [executor]
+                enabled = true
+                router = "0x0000000000000000000000000000000000000044"
+                weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+                expected_runtime_code_hash = "0x1111111111111111111111111111111111111111111111111111111111111111"
+                allowed_protocols = []
+            "#,
+            |_| None,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("allowed protocol"));
+    }
+
+    #[test]
+    fn executor_slippage_policy_cannot_permit_zero_output() {
+        let error = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+                [executor]
+                max_slippage_bps = 10000
+            "#,
+            |_| None,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("max_slippage_bps"));
+    }
+
+    #[test]
+    fn executor_deadline_policy_must_be_bounded_and_nonzero() {
+        let error = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+                [executor]
+                default_deadline_secs = 0
+                max_deadline_secs = 60
+            "#,
+            |_| None,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("executor deadline"));
+    }
+
+    #[test]
+    fn profiles_accept_executable_manual_pool_families() {
+        let config = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+
+                [[pools]]
+                protocol = "slipstream"
+                address = "0x0000000000000000000000000000000000000101"
+                tokens = [
+                  "0x0000000000000000000000000000000000000011",
+                  "0x0000000000000000000000000000000000000022"
+                ]
+                fee = 500
+                tick_spacing = 10
+                quoter = "0x0000000000000000000000000000000000000102"
+
+                [[pools]]
+                protocol = "solidly_v2"
+                address = "0x0000000000000000000000000000000000000201"
+                tokens = [
+                  "0x0000000000000000000000000000000000000011",
+                  "0x0000000000000000000000000000000000000022"
+                ]
+                stable = false
+                reserve0_slot = "20"
+                reserve1_slot = "21"
+                token0_slot = "13"
+                token1_slot = "14"
+
+                [[pools]]
+                protocol = "balancer_v2"
+                address = "0x0000000000000000000000000000000000000301"
+                pool_id = "0x3333333333333333333333333333333333333333333333333333333333333333"
+                vault = "0x0000000000000000000000000000000000000302"
+                tokens = [
+                  "0x0000000000000000000000000000000000000011",
+                  "0x0000000000000000000000000000000000000022"
+                ]
+                discovered_slots = ["3", "4"]
+            "#,
+            |_| None,
+        )
+        .unwrap();
+
+        assert_eq!(config.pools.len(), 3);
+    }
+
+    #[test]
+    fn manual_balancer_requires_a_verified_vault_read_set() {
+        let error = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+
+                [[pools]]
+                protocol = "balancer_v2"
+                address = "0x0000000000000000000000000000000000000301"
+                pool_id = "0x3333333333333333333333333333333333333333333333333333333333333333"
+                vault = "0x0000000000000000000000000000000000000302"
+                tokens = [
+                  "0x0000000000000000000000000000000000000011",
+                  "0x0000000000000000000000000000000000000022"
+                ]
+            "#,
+            |_| None,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("must set discovered_slots"));
+    }
+
+    #[test]
     fn missing_environment_variable_is_an_error() {
         let error = SidecarConfig::parse_with(
             r#"
@@ -950,6 +1538,84 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.to_string().contains("RPC bounds"));
+    }
+
+    #[test]
+    fn canonical_recovery_policy_and_ordered_fallbacks_are_resolved() {
+        let config = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://primary.example"
+                canonical_ws_fallbacks = ["wss://secondary.example", "ws://tertiary.example"]
+                canonical_max_stale_secs = 20
+                canonical_health_check_interval_ms = 250
+                canonical_reconnect_initial_delay_ms = 100
+                canonical_reconnect_max_delay_ms = 5000
+                canonical_rebuild_timeout_secs = 90
+            "#,
+            |_| None,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.canonical_ws_endpoints(),
+            vec![
+                "wss://primary.example",
+                "wss://secondary.example",
+                "ws://tertiary.example"
+            ]
+        );
+        assert_eq!(config.rpc.canonical_max_stale, Duration::from_secs(20));
+        assert_eq!(
+            config.rpc.canonical_health_check_interval,
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            config.rpc.canonical_reconnect_initial_delay,
+            Duration::from_millis(100)
+        );
+        assert_eq!(
+            config.rpc.canonical_reconnect_max_delay,
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            config.rpc.canonical_rebuild_timeout,
+            Duration::from_secs(90)
+        );
+    }
+
+    #[test]
+    fn duplicate_canonical_websocket_endpoints_are_rejected() {
+        let error = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+                canonical_ws_fallbacks = ["wss://rpc.example"]
+            "#,
+            |_| None,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("must be unique"));
+    }
+
+    #[test]
+    fn canonical_reconnect_delay_bounds_are_validated() {
+        let error = SidecarConfig::parse_with(
+            r#"
+                extends = "ethereum-mainnet"
+                [rpc]
+                canonical_ws = "wss://rpc.example"
+                canonical_reconnect_initial_delay_ms = 2000
+                canonical_reconnect_max_delay_ms = 1000
+            "#,
+            |_| None,
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("initial_delay"));
     }
 
     #[test]

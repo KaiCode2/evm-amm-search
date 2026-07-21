@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result, anyhow, bail};
-use evm_amm_route_sidecar::{api, config::SidecarConfig, node::RoutingNode};
+use evm_amm_route_sidecar::{SERVICE_VERSION, api, config::SidecarConfig, node::RoutingSupervisor};
 use tokio::{net::TcpListener, task::LocalSet};
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
@@ -33,16 +33,16 @@ async fn run() -> Result<()> {
     }
 
     let listen = config.server.listen.clone();
-    let node = RoutingNode::bootstrap(Arc::clone(&config)).await?;
+    let supervisor = RoutingSupervisor::bootstrap(Arc::clone(&config)).await?;
     let listener = TcpListener::bind(&listen)
         .await
         .with_context(|| format!("bind HTTP server to {listen}"))?;
     info!(%listen, "HTTP sidecar listening");
-    let app = api::router(api::AppState::new(Arc::clone(&node)));
+    let app = api::router(api::AppState::new(Arc::clone(&supervisor)));
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await;
-    node.shutdown().await;
+    supervisor.shutdown().await;
     result.context("serve routing sidecar")
 }
 
@@ -61,9 +61,13 @@ fn arguments() -> Result<(PathBuf, bool)> {
                     .context("--config requires a path")?;
             }
             "--check-config" => check_only = true,
+            "--version" | "-V" => {
+                println!("evm-amm-route-sidecar {SERVICE_VERSION}");
+                std::process::exit(0);
+            }
             "--help" | "-h" => {
                 println!(
-                    "evm-amm-route-sidecar [--config PATH] [--check-config]\n\nAMM_ROUTE_CONFIG may also set the TOML path."
+                    "evm-amm-route-sidecar [--config PATH] [--check-config] [--version]\n\nAMM_ROUTE_CONFIG may also set the TOML path."
                 );
                 std::process::exit(0);
             }

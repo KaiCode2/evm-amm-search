@@ -1,0 +1,78 @@
+name: Quoter nightly release gate
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: evm-amm-search
+
+jobs:
+  recovery-soak:
+    name: exact-image recovery soak
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: evm-amm-search
+
+      - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: stable
+
+      - name: Build exact release image
+        run: |
+          mkdir -p artifacts
+          sidecar/scripts/build-release-image.sh \
+            evm-amm-route-sidecar:nightly \
+            artifacts/release-image.json
+
+      - name: Five-minute outage, restart, reorg, and recovery soak
+        run: |
+          set -o pipefail
+          QUOTER_SIDECAR_IMAGE=evm-amm-route-sidecar:nightly \
+          QUOTER_LOAD_REQUESTS=256 \
+          QUOTER_LOAD_CONCURRENCY=32 \
+          QUOTER_LONG_OUTAGE_SECONDS=300 \
+          QUOTER_SHORT_OUTAGE_CYCLES=10 \
+          QUOTER_TEST_PROVIDER_RESTART=true \
+          QUOTER_TEST_REORG=true \
+          QUOTER_EVIDENCE_JSON=artifacts/quoter-nightly.json \
+          sidecar/scripts/quoter-hardening-anvil.sh 2>&1 \
+            | tee artifacts/quoter-nightly.log
+
+      - name: Generate image SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: evm-amm-route-sidecar:nightly
+          format: spdx-json
+          output-file: evm-amm-search/artifacts/sidecar.spdx.json
+          upload-artifact: false
+
+      - name: Scan image for fixed high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: evm-amm-route-sidecar:nightly
+          format: table
+          output: evm-amm-search/artifacts/trivy.txt
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+      - name: Upload nightly evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quoter-nightly-evidence
+          path: evm-amm-search/artifacts
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,26 @@
+{
+  "chain_mode": "local",
+  "image": "evm-amm-route-sidecar:graph-index",
+  "parallel_load": {
+    "requests": 128,
+    "concurrency": 32,
+    "p50_ms": 20.076,
+    "p95_ms": 136.559,
+    "p99_ms": 177.952
+  },
+  "extended_outage": {
+    "duration_seconds": 40,
+    "readiness_failed_after_seconds": 14,
+    "stale_quote_http": 503,
+    "stale_quote_code": "canonical_reconnecting",
+    "initial_generation": 1,
+    "recovered_generation": 3,
+    "recovered_endpoint_index": 1
+  },
+  "short_outage_cycles": 1,
+  "provider_restart_tested": false,
+  "reorg_tested": false,
+  "final_block": 5,
+  "final_runtime_health": "healthy",
+  "post_recovery_quote_http": 200
+}
