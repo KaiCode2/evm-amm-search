@@ -107,3 +107,30 @@ and `sidecar-v0.1.0-beta.1` for the first container prerelease. Do not publish a
 sidecar's exact `evm-amm-search` dependency and lockfile to the now-visible
 `0.1.2` crate, run the archive-fork workflow with `ETHEREUM_RPC_URL`, and verify
 the release image's `--version`, `/v1/status`, OCI revision, and source labels.
+
+The `sidecar-v*` tag workflow enforces that sequence. It refuses a tag that does
+not exactly match `sidecar/Cargo.toml`, calls the pinned archive-fork workflow,
+builds and tests the exact version-tagged image, emits an SBOM, blocks fixed high
+or critical vulnerabilities, and publishes only
+`ghcr.io/kaicode2/evm-amm-route-sidecar:<version>`. It then verifies an
+unauthenticated pull by digest before creating a GitHub prerelease with the
+image digest and retained evidence.
+
+GitHub Container Registry may make a first package private even when its source
+repository is public. If the anonymous-pull job fails after the first push, set
+the `evm-amm-route-sidecar` package visibility to public in GitHub Packages and
+rerun the failed jobs. Do not announce the beta until that unauthenticated pull
+passes.
+
+After this preparation lands on `main`, configure the `ETHEREUM_RPC_URL`
+repository secret, then create and push the annotated tag from the reviewed
+merge commit:
+
+```bash
+git tag -a sidecar-v0.1.0-beta.1 -m 'Release evm-amm-route-sidecar 0.1.0-beta.1'
+git push origin sidecar-v0.1.0-beta.1
+```
+
+The tag is the publication action: pushing it uploads the image and creates the
+GitHub prerelease. Do not create the tag until public beta publication has been
+explicitly approved.

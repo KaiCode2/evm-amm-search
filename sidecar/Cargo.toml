@@ -24,7 +24,7 @@ alloy-sol-types = "1.4"
 alloy-transport-balancer = "0.2.0"
 anyhow = "1.0.98"
 axum = "0.8.9"
-evm-amm-search = { version = "=0.1.1", default-features = false, features = ["live-runtime", "uniswap-v2", "uniswap-v3", "pancake-v3", "slipstream", "solidly-v2", "balancer-v2", "curve"] }
+evm-amm-search = { version = "=0.1.2", default-features = false, features = ["live-runtime", "uniswap-v2", "uniswap-v3", "pancake-v3", "slipstream", "solidly-v2", "balancer-v2", "curve"] }
 evm-amm-state = { version = "0.2.0", default-features = false, features = ["live-runtime", "uniswap-v2", "uniswap-v3", "pancake-v3", "slipstream", "solidly-v2", "balancer-v2", "curve"] }
 evm-fork-cache = "0.3.0"
 futures = "0.3"
