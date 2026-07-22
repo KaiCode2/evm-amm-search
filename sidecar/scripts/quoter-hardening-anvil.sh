@@ -62,7 +62,14 @@ sidecar_alive() {
 }
 
 start_anvil() {
-  local args=(--silent --host 127.0.0.1 --port "$anvil_port")
+  local anvil_host=127.0.0.1
+  if [[ -n "$sidecar_image" ]]; then
+    # Linux containers reach the host through the Docker bridge gateway, not
+    # its loopback interface. Keep host-binary runs loopback-only, but expose
+    # the ephemeral test chain to the bridge for exact-image gates.
+    anvil_host=0.0.0.0
+  fi
+  local args=(--silent --host "$anvil_host" --port "$anvil_port")
   if [[ "$chain_mode" == "local" ]]; then
     args+=(--state "$anvil_state" --preserve-historical-states)
   else
@@ -175,7 +182,9 @@ export RUST_LOG=${QUOTER_RUST_LOG:-evm_amm_route_sidecar=info,tower_http=info}
 
 if [[ -n "$sidecar_image" ]]; then
   docker image inspect "$sidecar_image" >/dev/null
-  docker run --detach --rm \
+  # Do not use --rm here: if startup fails, cleanup must still be able to
+  # retain and print the container's diagnostic logs before removing it.
+  docker run --detach \
     --name "$sidecar_container" \
     --add-host host.docker.internal:host-gateway \
     --publish "127.0.0.1:${sidecar_port}:8080" \
