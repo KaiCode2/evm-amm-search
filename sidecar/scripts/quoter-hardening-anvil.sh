@@ -28,6 +28,7 @@ proxy_api="http://127.0.0.1:${proxy_control_port}"
 sidecar_url="http://127.0.0.1:${sidecar_port}"
 proxy_container="amm-route-toxiproxy-$$"
 sidecar_container="amm-route-sidecar-gate-$$"
+test_network="amm-route-gate-$$"
 tmp_dir=$(mktemp -d)
 anvil_state="$tmp_dir/anvil-state.json"
 
@@ -108,6 +109,7 @@ cleanup() {
   if [[ -n "${anvil_pid:-}" ]]; then kill "$anvil_pid" 2>/dev/null || true; fi
   docker rm --force "$sidecar_container" >/dev/null 2>&1 || true
   docker rm --force "$proxy_container" >/dev/null 2>&1 || true
+  docker network rm "$test_network" >/dev/null 2>&1 || true
   rm -rf "$tmp_dir"
   exit "$status"
 }
@@ -141,8 +143,10 @@ if [[ "$chain_mode" == "local" && ! -s "$anvil_state" ]]; then
   cast rpc --rpc-url "$anvil_rpc" anvil_mine 0x1 >/dev/null
 fi
 
+docker network create "$test_network" >/dev/null
 docker run --detach --rm \
   --name "$proxy_container" \
+  --network "$test_network" \
   --add-host host.docker.internal:host-gateway \
   --publish "127.0.0.1:${proxy_control_port}:8474" \
   --publish "127.0.0.1:${proxy_port}:8666" \
@@ -186,15 +190,16 @@ if [[ -n "$sidecar_image" ]]; then
   # retain and print the container's diagnostic logs before removing it.
   docker run --detach \
     --name "$sidecar_container" \
+    --network "$test_network" \
     --add-host host.docker.internal:host-gateway \
     --publish "127.0.0.1:${sidecar_port}:8080" \
     --read-only \
     --cap-drop ALL \
     --security-opt no-new-privileges:true \
-    --env ANVIL_PROXY_WS_URL="ws://host.docker.internal:${proxy_port}" \
-    --env ANVIL_FALLBACK_PROXY_WS_URL="ws://host.docker.internal:${fallback_proxy_port}" \
+    --env ANVIL_PROXY_WS_URL="ws://${proxy_container}:8666" \
+    --env ANVIL_FALLBACK_PROXY_WS_URL="ws://${proxy_container}:8667" \
     --env ANVIL_INVALID_WS_URL \
-    --env ANVIL_STATE_RPC_URL="http://host.docker.internal:${state_proxy_port}" \
+    --env ANVIL_STATE_RPC_URL="http://${proxy_container}:8668" \
     --env ANVIL_SIDECAR_LISTEN="0.0.0.0:8080" \
     --env AMM_ROUTE_ADMIN_TOKEN \
     --env ETHEREUM_RPC_URL \
