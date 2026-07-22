@@ -5,6 +5,8 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-22
+
 ### Added
 
 - An experimental, separately packaged HTTP routing sidecar with TOML profiles,
@@ -77,6 +79,12 @@ based on Keep a Changelog and this project follows Semantic Versioning.
   and their required demo contracts.
 - The sidecar enters its independent `0.1.0-beta.1` version line and pins the
   exact released `evm-amm-search` dependency recorded by its lockfile.
+
+### Fixed
+
+- The exact-image recovery gate now connects its sidecar and Toxiproxy over a
+  private Docker network, exposes the ephemeral Anvil chain to the Linux bridge,
+  and retains failed sidecar containers long enough to capture startup logs.
 
 ## [0.1.1] - 2026-07-21
 
@@ -205,6 +213,7 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 - Benchmark failure observers now survive receiver lag and report skipped-event
   counts instead of silently returning a false zero-failure summary.
 
-[Unreleased]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/KaiCode2/evm-amm-search/releases/tag/v0.1.0
