@@ -2,6 +2,9 @@
 /target/
 /.cache/
 /bench-cache/
+/cache/
+/out/
+/broadcast/
 
 # Local environment
 .env

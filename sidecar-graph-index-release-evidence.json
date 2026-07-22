@@ -1,0 +1,16 @@
+{
+  "image": "evm-amm-route-sidecar:graph-index",
+  "image_id": "sha256:383ca8a91a410929ccee1ec6b59302491e85d94ba590345ac1c91bfebd4c9fa8",
+  "vcs_ref": "d7ac187a56b82fcd3e2f6f512ca01da7c0465c00",
+  "workspace_dirty": true,
+  "started_at": "2026-07-21T19:52:59Z",
+  "finished_at": "2026-07-21T19:55:01Z",
+  "duration_seconds": 122,
+  "cargo_build_jobs": 4,
+  "image_size_bytes": 43040078,
+  "platform": {
+    "os": "linux",
+    "architecture": "arm64"
+  },
+  "runtime_user": "router"
+}

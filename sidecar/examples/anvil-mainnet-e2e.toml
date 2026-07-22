@@ -1,0 +1,159 @@
+# Local-only end-to-end profile used by executor-e2e-anvil.sh.
+extends = "ethereum-mainnet"
+replace_tokens = true
+replace_factories = true
+replace_pools = true
+
+[server]
+listen = "${ANVIL_SIDECAR_LISTEN}"
+admin_bearer_token = "${AMM_ROUTE_ADMIN_TOKEN}"
+
+[rpc]
+canonical_ws = "${ANVIL_WS_URL}"
+batch_size = 25
+cold_start_concurrency = 2
+point_read_slots_per_batch = 50
+point_read_concurrency = 2
+bulk_max_concurrent_calls = 1
+
+[[rpc.state]]
+url = "${ETHEREUM_RPC_URL}"
+weight = 100
+max_in_flight = 32
+
+[routing]
+default_quality = "balanced"
+default_max_hops = 3
+default_top_k = 5
+default_timeout_ms = 10000
+max_hops = 4
+max_top_k = 64
+max_timeout_ms = 20000
+allow_exhaustive = true
+
+[discovery]
+quote_default = "if_missing"
+max_startup_pools = 16
+max_concurrent_requests = 2
+negative_ttl_secs = 30
+
+[[tokens]]
+symbol = "USDC"
+address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+decimals = 6
+connector = true
+
+[[tokens]]
+symbol = "WETH"
+address = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+decimals = 18
+connector = true
+
+[[tokens]]
+symbol = "DAI"
+address = "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+decimals = 18
+connector = true
+
+[[tokens]]
+symbol = "USDT"
+address = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+decimals = 6
+connector = false
+
+[[tokens]]
+symbol = "BAL"
+address = "0xba100000625a3754423978a60c9317c58a424e3D"
+decimals = 18
+connector = false
+
+[[pools]]
+protocol = "uniswap_v2"
+address = "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"
+tokens = [
+  "0xA0b86991c6218b36c1d19D4a2e9eb0cE3606eB48",
+  "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+]
+fee_bps = 30
+
+[[pools]]
+protocol = "uniswap_v2"
+address = "0xA478c2975Ab1Ea89e8196811F51A7B7Ade33eB11"
+tokens = [
+  "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+  "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+]
+fee_bps = 30
+
+[[pools]]
+protocol = "uniswap_v3"
+address = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"
+tokens = [
+  "0xA0b86991c6218b36c1d19D4a2e9eb0cE3606eB48",
+  "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+]
+fee = 500
+tick_spacing = 10
+factory = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+quoter = "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
+
+[[pools]]
+protocol = "pancake_v3"
+address = "0x1ac1A8FEaAEa1900C4166dEeed0C11cC10669D36"
+tokens = [
+  "0xA0b86991c6218b36c1d19D4a2e9eb0cE3606eB48",
+  "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+]
+fee = 500
+tick_spacing = 10
+factory = "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
+quoter = "0xB048BBC1Ee6B733FFfCFb9e9CeF7375518e25997"
+
+[[pools]]
+protocol = "balancer_v2"
+address = "0x5c6Ee304399DBdB9C8Ef030aB642B10820DB8F56"
+pool_id = "0x5c6ee304399dbdb9c8ef030ab642b10820db8f56000200000000000000000014"
+vault = "0xBA12222222228d8Ba445958a75a0704d566BF2C8"
+tokens = [
+  "0xba100000625a3754423978a60c9317c58a424e3D",
+  "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+]
+discovered_slots = [
+  "0x12401bb69eff8970c9e72fa8b908861ce7e19716651e0ca57d3153ab9aaa184e",
+  "0x12401bb69eff8970c9e72fa8b908861ce7e19716651e0ca57d3153ab9aaa184f",
+  "0x361651c3e997096c19cda01c347783d40c6fa64db2f7c5cdca379e0beda32e06",
+  "0xf54f8fecfb8cf514b5982a6dba69cf7c47daa66914017a2f8b8874ddc89ac30b",
+  "0xf54f8fecfb8cf514b5982a6dba69cf7c47daa66914017a2f8b8874ddc89ac30c",
+]
+
+[[pools]]
+protocol = "curve"
+address = "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7"
+tokens = [
+  "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+  "0xA0b86991c6218b36c1d19D4a2e9eb0cE3606eB48",
+  "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+]
+variant = "stable"
+discovered_slots = [
+  "2",
+  "7",
+  "9",
+  "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6",
+  "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf7",
+  "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf8",
+]
+
+[executor]
+enabled = true
+router = "${EXECUTOR_ROUTER}"
+weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+expected_runtime_code_hash = "${EXECUTOR_RUNTIME_CODE_HASH}"
+allowed_protocols = ["uniswap_v2"]
+default_deadline_secs = 120
+max_deadline_secs = 600
+max_snapshot_age_secs = 600
+max_slippage_bps = 500
+max_in_flight_simulations = 4
+simulation_timeout_ms = 10000

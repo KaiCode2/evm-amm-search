@@ -1,0 +1,72 @@
+name: Executor pinned-fork reliability gate
+
+on:
+  schedule:
+    - cron: "41 3 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+concurrency:
+  group: executor-pinned-fork-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: evm-amm-search
+
+jobs:
+  fork-reliability:
+    name: generated routes execute with exact output parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: evm-amm-search
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: evm-amm-search/sidecar
+
+      - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: stable
+
+      - name: Require archive RPC configuration
+        run: |
+          if [[ -z "$ETHEREUM_RPC_URL" ]]; then
+            echo "ETHEREUM_RPC_URL repository secret is required" >&2
+            exit 1
+          fi
+
+      - name: Pinned executor contract fork matrix
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          sidecar/scripts/executor-fork-smoke.sh 2>&1 \
+            | tee artifacts/executor-contract-fork.log
+
+      - name: Sidecar-generated transaction execution matrix
+        run: |
+          set -o pipefail
+          EXECUTOR_E2E_EVIDENCE_JSON=artifacts/executor-e2e.json \
+          sidecar/scripts/executor-e2e-anvil.sh 2>&1 \
+            | tee artifacts/executor-e2e.log
+
+      - name: Upload fork evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: executor-pinned-fork-evidence
+          path: evm-amm-search/artifacts
+          if-no-files-found: warn
+          retention-days: 30

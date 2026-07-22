@@ -1,0 +1,72 @@
+{
+  "fork_block": "25583844",
+  "router": "0x99c51EcCB10A54C1145E4555e17AB4407cf01E0f",
+  "runtime_code_hash": "0x824fc867cd06cd0eab0926f7eac4707342f26440466ecfceedcae7abedb5be61",
+  "scenarios": [
+    {
+      "scenario": "mixed_v2_curve",
+      "block_number": "25583844",
+      "block_hash": "0x611ba532afcd73c3e864b78751c879d2efd17abe8990f6d6a4492efa6f1bab90",
+      "block_timestamp": "1784669963",
+      "route_rank": "1",
+      "protocols": [
+        "uniswap_v2",
+        "curve"
+      ],
+      "amount_out": "191553096",
+      "min_amount_out": "189637565",
+      "gas_estimate": "376263",
+      "transaction_hash": "0x055861106acb1765de031025362015288e26b2b2c4d3755119ee9bda87befc22",
+      "receipt_status": "success",
+      "quote_simulation_execution_parity": true
+    },
+    {
+      "scenario": "pancake_v3",
+      "block_number": "25583844",
+      "block_hash": "0x611ba532afcd73c3e864b78751c879d2efd17abe8990f6d6a4492efa6f1bab90",
+      "block_timestamp": "1784669963",
+      "route_rank": "1",
+      "protocols": [
+        "pancake_v3"
+      ],
+      "amount_out": "192263224",
+      "min_amount_out": "190340591",
+      "gas_estimate": "312803",
+      "transaction_hash": "0x786b163efd0abd9ee90960dd432820f56cdf807420ed0febdd0275872b50f4c2",
+      "receipt_status": "success",
+      "quote_simulation_execution_parity": true
+    },
+    {
+      "scenario": "uniswap_v2",
+      "block_number": "25583844",
+      "block_hash": "0x611ba532afcd73c3e864b78751c879d2efd17abe8990f6d6a4492efa6f1bab90",
+      "block_timestamp": "1784669963",
+      "route_rank": "1",
+      "protocols": [
+        "uniswap_v2"
+      ],
+      "amount_out": "191456775",
+      "min_amount_out": "189542207",
+      "gas_estimate": "200570",
+      "transaction_hash": "0x3aafd93f61e3bd454d8bf64f11fb7b7e66a4d75b19e9a549eb23d1fddbb85a72",
+      "receipt_status": "success",
+      "quote_simulation_execution_parity": true
+    },
+    {
+      "scenario": "uniswap_v3",
+      "block_number": "25583844",
+      "block_hash": "0x611ba532afcd73c3e864b78751c879d2efd17abe8990f6d6a4492efa6f1bab90",
+      "block_timestamp": "1784669963",
+      "route_rank": "1",
+      "protocols": [
+        "uniswap_v3"
+      ],
+      "amount_out": "192353648",
+      "min_amount_out": "190430111",
+      "gas_estimate": "270612",
+      "transaction_hash": "0xf941288df9ee7bde4c76e9b0e599d46790210a60e922abcfcdd00b3eba392ae8",
+      "receipt_status": "success",
+      "quote_simulation_execution_parity": true
+    }
+  ]
+}

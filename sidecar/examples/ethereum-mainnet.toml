@@ -1,0 +1,103 @@
+# Built-in Ethereum profile. The secret URL is interpolated after TOML parsing.
+extends = "ethereum-mainnet"
+
+[server]
+listen = "0.0.0.0:8080"
+admin_bearer_token = "${AMM_ROUTE_ADMIN_TOKEN}"
+
+[rpc]
+canonical_ws = "${ETHEREUM_WS_URL}"
+# Ordered fallback endpoints are tried during initial startup and rotated after
+# a terminal or stale canonical generation.
+# canonical_ws_fallbacks = ["${ETHEREUM_FALLBACK_WS_URL}"]
+
+# Quote/readiness freshness and fresh-generation rebuild policy.
+canonical_max_stale_secs = 45
+canonical_health_check_interval_ms = 1000
+canonical_reconnect_initial_delay_ms = 250
+canonical_reconnect_max_delay_ms = 30000
+canonical_rebuild_timeout_secs = 240
+
+# Low-level transport and subscribe/backfill recovery. Omitting
+# canonical_stream_reconnect_max_attempts retries terminated streams forever.
+canonical_transport_max_retries = 10
+canonical_transport_retry_interval_ms = 3000
+canonical_stream_reconnect_initial_delay_ms = 0
+canonical_stream_reconnect_retry_delay_ms = 250
+canonical_stream_reconnect_max_delay_ms = 30000
+canonical_stream_dedupe_window = 4096
+
+# Optional load-balanced HTTP state providers. When omitted, canonical_ws also
+# serves state reads.
+# [[rpc.state]]
+# url = "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+# weight = 150
+# max_request_bytes = 2400000
+# max_in_flight = 32
+
+[routing]
+default_quality = "balanced"
+default_max_hops = 3
+default_top_k = 3
+default_timeout_ms = 5000
+max_hops = 4
+max_top_k = 5
+max_timeout_ms = 15000
+allow_exhaustive = true
+
+[discovery]
+quote_default = "if_missing"
+max_startup_pools = 128
+max_concurrent_requests = 8
+negative_ttl_secs = 300
+
+# Experimental executable quotes are opt-in. Enabling also requires the
+# deployed router configuration and its exact runtime bytecode hash.
+[executor]
+enabled = false
+allowed_protocols = ["uniswap_v2", "uniswap_v3", "pancake_v3", "curve"]
+default_deadline_secs = 120
+max_deadline_secs = 600
+max_snapshot_age_secs = 60
+max_slippage_bps = 500
+max_in_flight_simulations = 8
+simulation_timeout_ms = 3000
+# router = "0x..."
+# weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+# permit2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+# expected_runtime_code_hash = "0x..."
+
+# Profile additions merge by address. These examples are already included by
+# the built-in profile; add your own tokens/factories/pools the same way.
+# [[tokens]]
+# symbol = "LDO"
+# address = "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32"
+# decimals = 18
+# connector = false
+
+# [[pools]]
+# protocol = "uniswap_v3"
+# address = "0x..."
+# tokens = ["0x...", "0x..."]
+# fee = 3000
+# tick_spacing = 60
+# factory = "0x..."
+# quoter = "0x..."
+
+# [[pools]]
+# protocol = "solidly_v2"
+# address = "0x..."
+# tokens = ["0x...", "0x..."]
+# stable = false
+# reserve0_slot = "20"
+# reserve1_slot = "21"
+# token0_slot = "13"
+# token1_slot = "14"
+
+# [[pools]]
+# protocol = "balancer_v2"
+# address = "0x..." # pool contract
+# pool_id = "0x..." # bytes32
+# vault = "0x..."
+# tokens = ["0x...", "0x..."]
+# discovered_slots = ["0x..."] # verified Vault slots touched by getPoolTokens

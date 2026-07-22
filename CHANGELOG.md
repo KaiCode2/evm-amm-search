@@ -5,6 +5,79 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- An experimental, separately packaged HTTP routing sidecar with TOML profiles,
+  warm canonical state, bounded fast/balanced/exhaustive quotes, and token
+  prewarming/discovery endpoints.
+- HTTP contract tests, fail-fast configuration bounds, and a non-root/read-only
+  Docker smoke gate for the sidecar deployment artifact.
+- An unaudited experimental exact-input executor contract covering all currently
+  routable protocol families, ERC-2612 and Permit2 authorization, native-input
+  wrapping, final-output minimums, per-hop full-consumption checks, and reusable
+  CREATE2 deployment.
+- A sidecar-local quote-to-executor encoder covering every executor protocol
+  tag, allowance/permit/native transaction envelopes, approval disclosure,
+  second-best-route minimum policy, explicit rejection of opaque custom
+  adapters, and pinned Ethereum fork smoke scaffolding.
+- A disabled-by-default executable-quote HTTP endpoint with final-output
+  slippage policy, snapshot-bound calldata, exact-block simulation, transaction
+  and approval gas estimates, deployment bytecode verification, and structured
+  failure responses.
+- Sidecar adapter and profile coverage for manual Slipstream, Solidly V2, and
+  Balancer V2 pools plus Slipstream and Solidly factory discovery.
+- Canonical-block timestamp deadlines, stale-snapshot rejection, explicit
+  ERC-2612 deadlines, executor protocol allowlists, and a structured
+  approval-required response with ready-to-submit approval calldata.
+- Exact router funding and recipient-delivery balance invariants, including
+  regression tests that fail closed for fee-on-transfer inputs and outputs.
+- Deterministic executor deployment/preflight tooling, Solidity CI, and pinned
+  real-fork execution coverage for Uniswap V2/V3, PancakeSwap V3, Balancer V2,
+  Curve, ERC-2612, and Permit2.
+- A full daemon-to-chain Anvil gate that turns a live mainnet-fork route into
+  calldata, requires the route quote and exact-block executor simulation to
+  agree, submits it, and verifies a successful receipt plus exact recipient
+  output parity across four single- and mixed-protocol scenarios.
+- A dedicated scheduled/manual archive-fork workflow that fails on missing RPC
+  configuration or skipped fork cases and retains contract and service-to-chain
+  execution evidence separately from the RPC-free pull-request suite.
+- Quoter concurrency characterization tests plus a reproducible Anvil and
+  Toxiproxy hardening harness covering parallel live quotes, fail-fast overload,
+  short websocket recovery, and terminal-outage stale-state detection.
+- Fail-closed readiness and quote generation fencing, configurable canonical
+  freshness and stream recovery, ordered websocket failover, and a sidecar
+  supervisor that replaces terminal routing generations from a fresh verified
+  baseline while retrying indefinitely.
+- A deterministic digest-pinned sidecar image build plus exact-image pull-request
+  and nightly recovery gates covering parallel load, stale-state rejection,
+  endpoint and DNS failover, independent state-provider failure, missed-block
+  catch-up, provider restart, shallow reorg, bounded memory growth, SBOM
+  generation, and vulnerability scanning.
+- A dated production-readiness record and ranked quoter hardening backlog with
+  explicit release acceptance criteria.
+- A commit-maintained sidecar graph index with constant-time request admission,
+  contiguous runtime-delta updates, lag/version-gap recovery, version-fenced
+  token coverage, and reproducible 128/1,024/8,192-pool benchmarks.
+- Release identity through `--version`, `/v1/status`, deterministic OCI labels,
+  a pull-only Compose profile, and a private vulnerability-reporting policy.
+
+### Changed
+
+- Executable quotes now fail closed when exact-block executor simulation output
+  differs from the selected route quote, even when both exceed the caller's
+  minimum output.
+- Manual V3 profiles now require and apply an explicit positive tick spacing,
+  manual Balancer profiles require their verified Vault read set, and profiles
+  with no factories no longer install unusable discovery watchers.
+- Balancer V2 is removed from the default executor allowlist until its
+  whole-account prepared-state ownership gap is fixed upstream and the full
+  generated-route gate passes; hand-encoded contract-fork coverage remains.
+- The crates.io package explicitly excludes the sidecar, executor deployment
+  package, workflows, and local evidence while retaining the library examples
+  and their required demo contracts.
+- The sidecar enters its independent `0.1.0-beta.1` version line and pins the
+  exact released `evm-amm-search` dependency recorded by its lockfile.
+
 ## [0.1.1] - 2026-07-21
 
 ### Changed

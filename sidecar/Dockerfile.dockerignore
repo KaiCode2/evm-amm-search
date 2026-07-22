@@ -1,0 +1,13 @@
+**
+
+!sidecar/
+!sidecar/Cargo.lock
+!sidecar/Cargo.toml
+!sidecar/src/
+!sidecar/src/**
+
+**/.git
+**/target
+**/.env
+**/.cache
+**/*.log

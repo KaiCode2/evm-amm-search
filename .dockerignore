@@ -1,0 +1,6 @@
+**
+!sidecar/Cargo.lock
+!sidecar/Cargo.toml
+!sidecar/Dockerfile
+!sidecar/benches/**
+!sidecar/src/**
