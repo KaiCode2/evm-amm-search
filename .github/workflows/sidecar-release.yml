@@ -1,0 +1,213 @@
+name: Publish sidecar beta
+
+on:
+  push:
+    tags:
+      - "sidecar-v*"
+
+env:
+  CARGO_TERM_COLOR: always
+  IMAGE_REPOSITORY: ghcr.io/kaicode2/evm-amm-route-sidecar
+
+concurrency:
+  group: sidecar-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  archive-fork:
+    name: pinned archive-fork execution gate
+    uses: ./.github/workflows/executor-fork.yml
+    secrets: inherit
+
+  publish:
+    name: build, verify, and publish exact image
+    needs: archive-fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        working-directory: evm-amm-search
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+      image: ${{ steps.release.outputs.image }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: evm-amm-search
+
+      - uses: dtolnay/rust-toolchain@1.88
+
+      - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: stable
+
+      - name: Validate immutable release identity
+        id: release
+        run: |
+          version=$(cargo metadata \
+            --locked \
+            --format-version 1 \
+            --no-deps \
+            --manifest-path sidecar/Cargo.toml \
+            | jq -r '.packages[0].version')
+          expected_tag="sidecar-v${version}"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "tag $GITHUB_REF_NAME does not match sidecar version $version" >&2
+            exit 1
+          fi
+          image="$IMAGE_REPOSITORY:$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Validate pull-only Compose profile
+        run: docker compose -f sidecar/compose.release.yaml config --quiet
+        env:
+          ETHEREUM_WS_URL: wss://rpc.example.invalid
+          AMM_ROUTE_ADMIN_TOKEN: compose-validation-only
+          AMM_ROUTE_IMAGE: ${{ steps.release.outputs.image }}
+
+      - name: Build exact release image
+        run: |
+          mkdir -p artifacts
+          sidecar/scripts/build-release-image.sh \
+            "${{ steps.release.outputs.image }}" \
+            artifacts/release-image.json
+
+      - name: Verify clean build provenance
+        run: |
+          jq -e \
+            --arg version "${{ steps.release.outputs.version }}" \
+            --arg revision "$GITHUB_SHA" \
+            '.workspace_dirty == false
+             and .image_version == $version
+             and .vcs_ref == $revision
+             and .runtime_user == "router"' \
+            artifacts/release-image.json >/dev/null
+
+      - name: Smoke exact image
+        run: sidecar/scripts/smoke-container.sh "${{ steps.release.outputs.image }}"
+
+      - name: Parallel load and recovery gate
+        run: |
+          set -o pipefail
+          QUOTER_SIDECAR_IMAGE="${{ steps.release.outputs.image }}" \
+          QUOTER_LOAD_REQUESTS=64 \
+          QUOTER_LOAD_CONCURRENCY=16 \
+          QUOTER_LONG_OUTAGE_SECONDS=40 \
+          QUOTER_EVIDENCE_JSON=artifacts/quoter-release-gate.json \
+          sidecar/scripts/quoter-hardening-anvil.sh 2>&1 \
+            | tee artifacts/quoter-release-gate.log
+
+      - name: Generate image SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ${{ steps.release.outputs.image }}
+          format: spdx-json
+          output-file: evm-amm-search/artifacts/sidecar.spdx.json
+          upload-artifact: false
+
+      - name: Scan image for fixed high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ${{ steps.release.outputs.image }}
+          format: table
+          output: evm-amm-search/artifacts/trivy.txt
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+      - name: Log in to GHCR
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push version tag and record digest
+        id: push
+        run: |
+          push_log=$(mktemp)
+          docker push "${{ steps.release.outputs.image }}" 2>&1 | tee "$push_log"
+          digest=$(sed -nE \
+            's/^.*digest: (sha256:[0-9a-f]{64}).*$/\1/p' \
+            "$push_log" \
+            | tail -n 1)
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "could not determine the published manifest digest" >&2
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          jq -n \
+            --arg image "${{ steps.release.outputs.image }}" \
+            --arg digest "$digest" \
+            --arg version "${{ steps.release.outputs.version }}" \
+            --arg revision "$GITHUB_SHA" \
+            '{image: $image, digest: $digest, version: $version, revision: $revision}' \
+            > artifacts/published-image.json
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sidecar-release-${{ steps.release.outputs.version }}
+          path: evm-amm-search/artifacts
+          if-no-files-found: error
+          retention-days: 90
+
+  verify-public:
+    name: verify anonymous digest pull
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Pull without registry credentials
+        run: docker pull "${{ needs.publish.outputs.image }}@${{ needs.publish.outputs.digest }}"
+
+      - name: Verify version and immutable labels
+        env:
+          IMAGE: ${{ needs.publish.outputs.image }}@${{ needs.publish.outputs.digest }}
+          EXPECTED_VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          docker run --rm "$IMAGE" --version \
+            | grep -Fx "evm-amm-route-sidecar $EXPECTED_VERSION"
+          test "$(docker image inspect \
+            --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' \
+            "$IMAGE")" = "$EXPECTED_VERSION"
+          test "$(docker image inspect \
+            --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+            "$IMAGE")" = "$GITHUB_SHA"
+
+  github-release:
+    name: create beta GitHub release
+    needs: [publish, verify-public]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download release evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: sidecar-release-${{ needs.publish.outputs.version }}
+          path: artifacts
+
+      - name: Create prerelease with immutable image digest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --prerelease \
+            --title "evm-amm-route-sidecar $VERSION beta" \
+            --notes "Self-hosted AMM routing sidecar public beta.\n\nImmutable image: $IMAGE@$DIGEST\n\nNo latest tag is published. Pin the digest in deployments. The executor is unaudited, executable quoting is disabled by default, and this release is deliberately not described as production-grade."

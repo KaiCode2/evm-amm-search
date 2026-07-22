@@ -2091,9 +2091,9 @@ dependencies = [
 
 [[package]]
 name = "evm-amm-search"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43b06c94f441f64592235e980983151b8696fa2fbb0682397150dd90ae057133"
+checksum = "13fbce6807a10e4fbff750b7dc070a4b10c11a16adf440307bfd4cbeb2ef9620"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",

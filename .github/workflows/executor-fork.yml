@@ -1,6 +1,11 @@
 name: Executor pinned-fork reliability gate
 
 on:
+  workflow_call:
+    secrets:
+      ETHEREUM_RPC_URL:
+        description: Ethereum archive RPC endpoint used by the pinned fork gates
+        required: true
   schedule:
     - cron: "41 3 * * 1"
   workflow_dispatch:
