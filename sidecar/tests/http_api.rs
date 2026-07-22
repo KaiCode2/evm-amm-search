@@ -31,8 +31,9 @@ use evm_amm_search::{
 };
 use evm_amm_state::adapters::{
     AdapterCache, AdapterRegistry, AmmAdapter, AmmRuntime, AmmRuntimeBaseline, AmmRuntimeConfig,
-    AmmRuntimeHandle, PoolKey, PoolRegistration, PoolStateDependencies, PoolStatus, ProtocolId,
-    ProtocolMetadata, SimConfig, SimError, SwapQuote, UniswapV2Metadata,
+    AmmRuntimeHandle, CurveMetadata, CurveVariant, PoolKey, PoolRegistration,
+    PoolStateDependencies, PoolStatus, ProtocolId, ProtocolMetadata, SimConfig, SimError,
+    SwapQuote, UniswapV2Metadata,
 };
 use evm_fork_cache::cache::EvmCache;
 use tower::ServiceExt;
@@ -319,6 +320,87 @@ async fn executable_backend() -> TestBackend {
     backend.config.executor.permit2 = Address::repeat_byte(0x77);
     backend.config.executor.max_snapshot_age = std::time::Duration::from_secs(u64::MAX);
     backend
+}
+
+async fn curve_executable_backend() -> TestBackend {
+    let token_in = Address::repeat_byte(0x01);
+    let token_out = Address::repeat_byte(0x02);
+    let header = RpcHeader::new(ConsensusHeader {
+        parent_hash: B256::repeat_byte(0x69),
+        number: 700,
+        timestamp: 1_700_000_700,
+        base_fee_per_gas: Some(800),
+        beneficiary: Address::repeat_byte(0xcb),
+        gas_limit: 30_000_000,
+        mix_hash: B256::repeat_byte(0xab),
+        ..ConsensusHeader::default()
+    });
+    let provider = RootProvider::<AnyNetwork>::new(RpcClient::mocked(Asserter::new()));
+    let mut cache = EvmCache::new(Arc::new(provider)).await;
+    cache.advance_block(&header).unwrap();
+    let mut registry = AdapterRegistry::new();
+    registry
+        .register_adapter(Arc::new(CurveRouteAdapter))
+        .unwrap();
+    registry
+        .register_pool(
+            PoolRegistration::new(PoolKey::Curve(Address::repeat_byte(0x70)))
+                .with_metadata(ProtocolMetadata::Curve(
+                    CurveMetadata::default()
+                        .with_coins([token_in, token_out])
+                        .with_variant(CurveVariant::StableSwap),
+                ))
+                .with_status(PoolStatus::Ready),
+        )
+        .unwrap();
+    let amm = AmmRuntime::spawn(
+        cache,
+        registry,
+        AmmRuntimeBaseline::from_verified_header(1, header).unwrap(),
+        AmmRuntimeConfig::default(),
+    )
+    .unwrap();
+    let routes = LiveRouteRuntime::spawn(
+        &amm,
+        GraphBuildOptions::default(),
+        LiveRouteRuntimeConfig::default().with_worker_threads(1),
+    )
+    .await
+    .unwrap();
+    let mut backend = TestBackend::new();
+    backend.config.executor.enabled = true;
+    backend.config.executor.router = Address::repeat_byte(0x44);
+    backend.config.executor.weth = Address::repeat_byte(0x66);
+    backend.config.executor.permit2 = Address::repeat_byte(0x77);
+    backend.config.executor.max_snapshot_age = std::time::Duration::from_secs(u64::MAX);
+    backend.graph_tokens = vec![token_in, token_out];
+    backend._amm = Some(amm);
+    backend.routes = Some(routes);
+    backend
+}
+
+struct CurveRouteAdapter;
+
+impl AmmAdapter for CurveRouteAdapter {
+    fn protocol(&self) -> ProtocolId {
+        ProtocolId::Curve
+    }
+
+    fn state_dependencies(&self, _pool: &PoolRegistration) -> PoolStateDependencies {
+        PoolStateDependencies::default()
+    }
+
+    fn simulate_swap(
+        &self,
+        _pool: &PoolRegistration,
+        _cache: &mut dyn AdapterCache,
+        _token_in: Address,
+        _token_out: Address,
+        amount_in: U256,
+        _config: &SimConfig,
+    ) -> Result<SwapQuote, SimError> {
+        Ok(SwapQuote::new(amount_in * U256::from(2)))
+    }
 }
 
 fn quote_request(amount_in: u64) -> Request<Body> {
@@ -1124,6 +1206,82 @@ async fn executable_quote_fails_closed_when_the_transaction_reverts() {
                 serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap())
                     .unwrap();
             assert_eq!(body["error"]["code"], "simulation_failed");
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn executable_quote_uses_exact_simulation_for_final_stableswap_rounding() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let mut backend = curve_executable_backend().await;
+            backend.simulation_amount_out = U256::from(1_999);
+            let app = router(AppState::new(Arc::new(backend)));
+            let response = app
+                .oneshot(
+                    Request::post("/v1/executable-quote")
+                        .header("content-type", "application/json")
+                        .body(Body::from(
+                            r#"{
+                                "token_in":"0x0101010101010101010101010101010101010101",
+                                "token_out":"0x0202020202020202020202020202020202020202",
+                                "amount_in":"1000",
+                                "sender":"0x1111111111111111111111111111111111111111",
+                                "recipient":"0x2222222222222222222222222222222222222222",
+                                "min_amount_out":"1900",
+                                "authorization":{"type":"allowance"},
+                                "options":{"top_k":1,"discovery":"off"}
+                            }"#,
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+            let body: serde_json::Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap())
+                    .unwrap();
+            assert_eq!(body["route"]["amount_out"], "1999");
+            assert_eq!(body["route"]["hops"][0]["amount_out"], "1999");
+            assert_eq!(body["simulation"]["amount_out"], "1999");
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn executable_quote_rejects_larger_final_stableswap_mismatches() {
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let mut backend = curve_executable_backend().await;
+            backend.simulation_amount_out = U256::from(1_998);
+            let app = router(AppState::new(Arc::new(backend)));
+            let response = app
+                .oneshot(
+                    Request::post("/v1/executable-quote")
+                        .header("content-type", "application/json")
+                        .body(Body::from(
+                            r#"{
+                                "token_in":"0x0101010101010101010101010101010101010101",
+                                "token_out":"0x0202020202020202020202020202020202020202",
+                                "amount_in":"1000",
+                                "sender":"0x1111111111111111111111111111111111111111",
+                                "recipient":"0x2222222222222222222222222222222222222222",
+                                "min_amount_out":"1900",
+                                "authorization":{"type":"allowance"},
+                                "options":{"top_k":1,"discovery":"off"}
+                            }"#,
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            let body: serde_json::Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap())
+                    .unwrap();
+            assert_eq!(body["error"]["code"], "simulation_quote_mismatch");
         })
         .await;
 }

@@ -14,7 +14,7 @@ use evm_amm_search::{
     RouteQuote, RouteRequest, RouteSubscriptionSnapshot, RouteSubscriptionSpec,
     RouteSubscriptionState, SearchConfig, SearchMode, StreamingSearchConfig,
 };
-use evm_amm_state::adapters::SimConfig;
+use evm_amm_state::adapters::{AdapterRegistry, CurveVariant, ProtocolMetadata, SimConfig};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Semaphore, TryAcquireError};
 use tower_http::{
@@ -525,12 +525,9 @@ async fn executable_quote<B: RoutingBackend>(
         .iter()
         .map(|(_, route)| route.clone())
         .collect::<Vec<_>>();
-    let swap = build_executable_swap(
-        snapshot.view().snapshot().registry().registry(),
-        &executable_route_quotes,
-        execution_request,
-    )
-    .map_err(ApiError::unprocessable)?;
+    let registry = snapshot.view().snapshot().registry().registry();
+    let swap = build_executable_swap(registry, &executable_route_quotes, execution_request)
+        .map_err(ApiError::unprocessable)?;
     let _simulation_permit = state
         .simulation_slots
         .try_acquire()
@@ -611,7 +608,9 @@ async fn executable_quote<B: RoutingBackend>(
             ),
         ));
     }
-    if simulation.amount_out != best.amount_out {
+    if simulation.amount_out != best.amount_out
+        && !is_final_stableswap_rounding(registry, best, simulation.amount_out)
+    {
         return Err(ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "simulation_quote_mismatch",
@@ -967,6 +966,28 @@ fn route_response(route: &RouteQuote) -> RouteResponse {
     }
 }
 
+fn is_final_stableswap_rounding(
+    registry: &AdapterRegistry,
+    route: &RouteQuote,
+    simulation_amount_out: U256,
+) -> bool {
+    // Classic StableSwap pools can round `get_dy` and `exchange` one output
+    // unit apart because fee deduction and denomination conversion occur in a
+    // different order. Only reconcile that exact final-hop case; the executor
+    // simulation remains authoritative and every other mismatch fails closed.
+    if simulation_amount_out.checked_add(U256::from(1)) != Some(route.amount_out) {
+        return false;
+    }
+    let Some(final_hop) = route.path.hops.last() else {
+        return false;
+    };
+    matches!(
+        registry.pool(&final_hop.pool).map(|pool| &pool.metadata),
+        Some(ProtocolMetadata::Curve(metadata))
+            if metadata.variant == CurveVariant::StableSwap
+    )
+}
+
 struct ExecutableResponseContext<'a> {
     chain_id: u64,
     sender: Address,
@@ -982,6 +1003,11 @@ fn executable_quote_response(
     approval_state: Option<ExecutionApprovalState>,
     simulation: ExecutionSimulation,
 ) -> ExecutableQuoteResponse {
+    let mut route = route_response(context.route);
+    route.amount_out = simulation.amount_out.to_string();
+    if let Some(final_hop) = route.hops.last_mut() {
+        final_hop.amount_out = simulation.amount_out.to_string();
+    }
     ExecutableQuoteResponse {
         warning: "EXPERIMENTAL: UNAUDITED DEMONSTRATION ROUTER; NOT INTENDED FOR PUBLIC OR PRODUCTION USE",
         source: SourceResponse {
@@ -993,7 +1019,7 @@ fn executable_quote_response(
             graph_revision: context.source.graph_version().revision(),
         },
         route_rank: context.route_rank,
-        route: route_response(context.route),
+        route,
         min_amount_out: swap.min_amount_out.to_string(),
         transaction: TransactionResponse {
             chain_id: context.chain_id,
