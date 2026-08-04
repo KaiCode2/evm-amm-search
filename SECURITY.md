@@ -25,3 +25,10 @@ disabled by default, the service never holds keys or submits transactions, and
 operators remain responsible for token policy, signing, fee policy, submission,
 and MEV protection. The current limitations and release blockers are tracked in
 [`sidecar/PRODUCTION_READINESS.md`](sidecar/PRODUCTION_READINESS.md).
+
+## Dependency auditing
+
+The core crate requires `ruint` 1.20.0 or newer, which fixes
+RUSTSEC-2026-0220. The locked `tracing-subscriber` 0.2.25 entry is confined to
+an inactive optional proof-system dependency and remains covered by the
+release-time scope check documented in `RELEASING.md`.

@@ -5,6 +5,11 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- The core crate's local development dependencies now target the Flashblocks
+  alpha.2 transport, cache, and AMM-state release train and require Rust 1.90.
+
 ## [0.1.2] - 2026-07-22
 
 ### Added

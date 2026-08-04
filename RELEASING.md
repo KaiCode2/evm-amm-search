@@ -2,9 +2,9 @@
 
 Release candidates are published in dependency order:
 
-1. `alloy-transport-balancer 0.2.0`;
-2. `evm-fork-cache 0.3.0`;
-3. `evm-amm-state 0.2.0`;
+1. `alloy-transport-balancer 0.3.0-alpha.2`;
+2. `evm-fork-cache 0.4.0-alpha.2`;
+3. `evm-amm-state 0.3.0-alpha.2`;
 4. `evm-amm-search 0.1.2`.
 
 Local development keeps versioned path dependencies. Cargo removes the paths
@@ -22,7 +22,7 @@ cargo clippy --locked --manifest-path sidecar/Cargo.toml --all-targets -- -D war
 cargo check --all-targets --no-default-features
 RUSTDOCFLAGS='-D warnings' cargo doc --all-features --no-deps
 RUSTDOCFLAGS='-D warnings' cargo doc --locked --manifest-path sidecar/Cargo.toml --no-deps
-cargo +1.88 check --all-targets --all-features
+cargo +1.90 check --all-targets --all-features
 cargo +1.88 check --locked --manifest-path sidecar/Cargo.toml
 cargo audit --ignore RUSTSEC-2025-0055
 cargo bench --bench graph_lifecycle

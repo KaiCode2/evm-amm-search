@@ -7599,10 +7599,10 @@ fn ctx_from_log(log: &RpcLog, chain_id: u64) -> ReactiveContext {
     };
     let chain_status = match (&block, log.removed) {
         (Some(block), true) => ChainStatus::Reorged {
-            dropped_from: block.clone(),
+            dropped_from: *block,
         },
         (Some(block), false) => ChainStatus::Included {
-            block: block.clone(),
+            block: *block,
             confirmations: 0,
         },
         (None, _) => ChainStatus::Pending,
