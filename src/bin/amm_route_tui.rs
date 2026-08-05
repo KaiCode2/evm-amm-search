@@ -2158,11 +2158,7 @@ async fn bootstrap_live_tui_inner(
         ],
     )
     .await?;
-    cache.set_block(BlockId::from((baseline_header.hash, Some(true))));
-    cache.set_block_context(
-        Some(baseline_header.inner.number),
-        baseline_header.inner.base_fee_per_gas,
-    );
+    install_verified_baseline_context(&mut cache, &baseline_header);
     cache
         .apply_prepared_account_patch(&quote_targets)
         .context("install verified shared AMM quote entrypoints")?;
@@ -2468,6 +2464,18 @@ async fn bootstrap_live_tui_inner(
     };
     permit.send(LiveBootstrapEvent::Ready(Box::new(ready)));
     Ok(())
+}
+
+fn install_verified_baseline_context(cache: &mut EvmCache, header: &alloy_rpc_types_eth::Header) {
+    // A hash pin deliberately clears header-derived EVM fields because a hash
+    // alone does not identify them. Restore every field from the same verified
+    // header before the cache is published to the AMM runtime.
+    cache.set_block(BlockId::from((header.hash, Some(true))));
+    cache.set_block_context(Some(header.inner.number), header.inner.base_fee_per_gas);
+    cache.set_coinbase(Some(header.inner.beneficiary));
+    cache.set_prevrandao(Some(header.inner.mix_hash));
+    cache.set_block_gas_limit(Some(header.inner.gas_limit));
+    cache.set_timestamp(Some(header.inner.timestamp));
 }
 
 fn merge_registration_hints(configured: &mut PoolRegistration, restored: PoolRegistration) {
@@ -9567,6 +9575,33 @@ mod live_tui_tests {
             cache.code_seed_state(&DEMO_ROUTER),
             Some(CodeSeedState::Etched { .. })
         ));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn verified_baseline_restores_full_context_after_hash_pin() {
+        use alloy_consensus::Header as ConsensusHeader;
+        use alloy_transport::mock::Asserter;
+
+        let provider = RootProvider::<AnyNetwork>::new(RpcClient::mocked(Asserter::new()));
+        let mut cache = EvmCache::new(Arc::new(provider)).await;
+        let header = alloy_rpc_types_eth::Header::new(ConsensusHeader {
+            number: 500,
+            timestamp: 1_700_000_500,
+            base_fee_per_gas: Some(100),
+            beneficiary: Address::repeat_byte(0xcb),
+            gas_limit: 30_000_000,
+            mix_hash: B256::repeat_byte(0xab),
+            ..ConsensusHeader::default()
+        });
+
+        install_verified_baseline_context(&mut cache, &header);
+
+        assert_eq!(cache.block_number(), Some(header.inner.number));
+        assert_eq!(cache.basefee(), header.inner.base_fee_per_gas);
+        assert_eq!(cache.coinbase(), Some(header.inner.beneficiary));
+        assert_eq!(cache.prevrandao(), Some(header.inner.mix_hash));
+        assert_eq!(cache.block_gas_limit(), Some(header.inner.gas_limit));
+        assert_eq!(cache.timestamp(), Some(header.inner.timestamp));
     }
 
     #[test]

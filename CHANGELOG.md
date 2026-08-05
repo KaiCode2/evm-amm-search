@@ -9,6 +9,10 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 
 - The core crate's local development dependencies now target the Flashblocks
   alpha.2 transport, cache, and AMM-state release train and require Rust 1.90.
+- Live TUI bootstrap now restores the complete verified EVM block context after
+  switching the cache to an exact block-hash pin, so the AMM runtime receives
+  coherent number, base fee, beneficiary, randomness, gas-limit, and timestamp
+  provenance.
 
 ## [0.1.2] - 2026-07-22
 
