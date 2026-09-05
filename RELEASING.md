@@ -2,13 +2,14 @@
 
 Release candidates are published in dependency order:
 
-1. `alloy-transport-balancer 0.2.0`;
-2. `evm-fork-cache 0.3.0`;
-3. `evm-amm-state 0.2.0`;
-4. `evm-amm-search 0.1.2`.
+1. `alloy-transport-balancer 0.3.0`;
+2. `evm-fork-cache 0.4.0`;
+3. `evm-amm-state 0.3.0`;
+4. `evm-amm-search 0.2.0`.
 
-Local development keeps versioned path dependencies. Cargo removes the paths
-from the packaged manifest and resolves the stated crates.io versions.
+All dependencies resolve from crates.io. Candidate integration checks may use
+an external patch configuration before publication; it must not ship in the
+repository, package, or final registry-only lockfile.
 
 ## Required gates
 
@@ -22,8 +23,8 @@ cargo clippy --locked --manifest-path sidecar/Cargo.toml --all-targets -- -D war
 cargo check --all-targets --no-default-features
 RUSTDOCFLAGS='-D warnings' cargo doc --all-features --no-deps
 RUSTDOCFLAGS='-D warnings' cargo doc --locked --manifest-path sidecar/Cargo.toml --no-deps
-cargo +1.88 check --all-targets --all-features
-cargo +1.88 check --locked --manifest-path sidecar/Cargo.toml
+cargo +1.90 check --all-targets --all-features
+cargo +1.90 check --locked --manifest-path sidecar/Cargo.toml
 cargo audit --ignore RUSTSEC-2025-0055
 cargo bench --bench graph_lifecycle
 cargo bench --all-features --bench live_search_runtime
@@ -35,7 +36,7 @@ Refresh the sidecar lockfile with its declared MSRV as the resolver ceiling:
 
 ```bash
 CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback \
-  cargo +1.88 update --manifest-path sidecar/Cargo.toml
+  cargo +1.90 update --manifest-path sidecar/Cargo.toml
 ```
 
 Build the sidecar from the `evm-amm-search` repository root and run its
@@ -58,7 +59,7 @@ built solely from this checkout and the exact crates.io releases recorded in
 
 The sidecar remains `publish = false` and is excluded from the normalized
 `evm-amm-search` crate. It ships with repository tags/container artifacts, not
-inside the crates.io tarball. Describe the first image as a self-hosted beta,
+inside the crates.io tarball. Describe the image as a self-hosted beta,
 not a production transaction router. Executable quoting remains disabled by
 default and the executor remains unaudited.
 
@@ -67,9 +68,9 @@ default and the executor remains unaudited.
 absent from `cargo tree --target all --all-features`. Remove the exception if
 that version enters the active graph.
 
-The core-crate CI jobs reproduce the test/clippy/docs/MSRV matrix with sibling
-state and cache checkouts for local path development. The sidecar container job
-deliberately uses only this repository and released crates.io dependencies. The
+The core-crate CI jobs reproduce the test/clippy/docs/MSRV matrix using the
+registry-only lockfile. The sidecar container job uses this repository and
+released crates.io dependencies. The
 package surface intentionally includes the examples, tests, benchmark sources,
 the demo Solidity sources/runtime artifact needed by those examples, and no
 sidecar, executor deployment package, workflow, local evidence, endpoint, or
@@ -101,11 +102,11 @@ visible on crates.io and the packaged-source build plus downstream
 compatibility checks pass. Confirm crates.io and docs.rs availability before
 creating the matching immutable GitHub release.
 
-The beta image has an independent version line. Use `v0.1.2` for the core crate
-and `sidecar-v0.1.0-beta.1` for the first container prerelease. Do not publish a
+The beta image has an independent version line. Use `v0.2.0` for the core crate
+and `sidecar-v0.1.0-beta.2` for the updated container prerelease. Do not publish a
 `latest` image tag during beta. Before the image tag is created, update the
 sidecar's exact `evm-amm-search` dependency and lockfile to the now-visible
-`0.1.2` crate, run the archive-fork workflow with `ETHEREUM_RPC_URL`, and verify
+`0.2.0` crate, run the archive-fork workflow with `ETHEREUM_RPC_URL`, and verify
 the release image's `--version`, `/v1/status`, OCI revision, and source labels.
 
 The `sidecar-v*` tag workflow enforces that sequence. It refuses a tag that does
@@ -127,8 +128,8 @@ repository secret, then create and push the annotated tag from the reviewed
 merge commit:
 
 ```bash
-git tag -a sidecar-v0.1.0-beta.1 -m 'Release evm-amm-route-sidecar 0.1.0-beta.1'
-git push origin sidecar-v0.1.0-beta.1
+git tag -a sidecar-v0.1.0-beta.2 -m 'Release evm-amm-route-sidecar 0.1.0-beta.2'
+git push origin sidecar-v0.1.0-beta.2
 ```
 
 The tag is the publication action: pushing it uploads the image and creates the

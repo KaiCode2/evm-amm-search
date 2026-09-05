@@ -1,6 +1,6 @@
 # Build context is the evm-amm-search repository. The sidecar compiles against
 # the released crates.io packages and does not require sibling checkouts.
-FROM rust:1.88-bookworm@sha256:af306cfa71d987911a781c37b59d7d67d934f49684058f96cf72079c3626bfe0 AS builder
+FROM rust:1.90-bookworm@sha256:3914072ca0c3b8aad871db9169a651ccfce30cf58303e5d6f2db16d1d8a7e58f AS builder
 
 WORKDIR /build
 
@@ -39,7 +39,7 @@ RUN useradd --create-home --uid 10001 router
 COPY --from=builder /tmp/evm-amm-route-sidecar /usr/local/bin/evm-amm-route-sidecar
 
 ARG VCS_REF=unknown
-ARG IMAGE_VERSION=0.1.0-beta.1
+ARG IMAGE_VERSION=0.1.0-beta.2
 ARG BUILD_CREATED=unknown
 ARG SOURCE_DATE_EPOCH=0
 LABEL org.opencontainers.image.title="evm-amm-route-sidecar" \

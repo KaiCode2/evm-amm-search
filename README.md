@@ -1,6 +1,6 @@
 # evm-amm-search
 
-Graph-based route and cycle search over [`evm-amm-state`](../evm-amm-state)
+Graph-based route and cycle search over [`evm-amm-state`](https://github.com/KaiCode2/evm-amm-state)
 registries.
 
 The crate is designed for warmed-cache routing where the first actionable quote
