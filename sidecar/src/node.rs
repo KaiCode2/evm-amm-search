@@ -243,6 +243,10 @@ impl RoutingNode {
         .await?;
         cache.set_block(BlockId::from((latest_header.hash, Some(true))));
         cache.set_block_context(Some(block_number), latest_header.inner.base_fee_per_gas);
+        cache.set_coinbase(Some(latest_header.inner.beneficiary));
+        cache.set_prevrandao(Some(latest_header.inner.mix_hash));
+        cache.set_block_gas_limit(Some(latest_header.inner.gas_limit));
+        cache.set_timestamp(Some(latest_header.inner.timestamp));
         cache
             .apply_prepared_account_patch(&patch)
             .context("install verified quote entrypoints")?;

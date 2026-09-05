@@ -1,8 +1,8 @@
 [package]
 name = "evm-amm-route-sidecar"
-version = "0.1.0-beta.1"
+version = "0.1.0-beta.2"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.90"
 license = "MIT OR Apache-2.0"
 description = "Self-hosted HTTP routing sidecar for evm-amm-search"
 publish = false
@@ -21,12 +21,12 @@ alloy-provider = { version = "1.0.38", features = ["ws"] }
 alloy-rpc-client = "1.0.38"
 alloy-rpc-types-eth = "1.0.38"
 alloy-sol-types = "1.4"
-alloy-transport-balancer = "0.2.0"
+alloy-transport-balancer = "0.3.0"
 anyhow = "1.0.98"
 axum = "0.8.9"
-evm-amm-search = { version = "=0.1.2", default-features = false, features = ["live-runtime", "uniswap-v2", "uniswap-v3", "pancake-v3", "slipstream", "solidly-v2", "balancer-v2", "curve"] }
-evm-amm-state = { version = "0.2.0", default-features = false, features = ["live-runtime", "uniswap-v2", "uniswap-v3", "pancake-v3", "slipstream", "solidly-v2", "balancer-v2", "curve"] }
-evm-fork-cache = "0.3.0"
+evm-amm-search = { version = "=0.2.0", default-features = false, features = ["live-runtime", "uniswap-v2", "uniswap-v3", "pancake-v3", "slipstream", "solidly-v2", "balancer-v2", "curve"] }
+evm-amm-state = { version = "0.3.0", default-features = false, features = ["live-runtime", "uniswap-v2", "uniswap-v3", "pancake-v3", "slipstream", "solidly-v2", "balancer-v2", "curve"] }
+evm-fork-cache = "0.4.0"
 futures = "0.3"
 petgraph = "0.6"
 serde = { version = "1", features = ["derive"] }
