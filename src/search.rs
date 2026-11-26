@@ -22,7 +22,7 @@ use evm_amm_state::adapters::{
 use evm_fork_cache::cache::EvmCache;
 #[cfg(feature = "live-runtime")]
 use evm_fork_cache::cache::{EvmOverlay, EvmSnapshot};
-use petgraph::Direction;
+use petgraph::{Direction, visit::EdgeRef};
 
 #[cfg(feature = "live-runtime")]
 use crate::live_graph::LiveAmmGraph;
@@ -3681,22 +3681,21 @@ impl<'a> AmmSearcher<'a> {
                     continue;
                 }
 
-                let mut visited_tokens = state.visited_tokens.clone();
-                visited_tokens.insert(next_token);
-                let mut used_pools = state.used_pools.clone();
-                used_pools.insert(pool.clone());
-
                 if !self.has_static_route_to_target(
                     next_node,
+                    next_token,
+                    &pool,
                     source,
                     target,
                     token_in,
                     token_out,
                     connector_tokens,
-                    visited_tokens,
-                    used_pools,
+                    &state.visited_tokens,
+                    &state.used_pools,
                     remaining_after_hop,
+                    max_hops,
                     allow_final_source_revisit,
+                    run_cache,
                 ) {
                     continue;
                 }
@@ -4154,109 +4153,143 @@ impl<'a> AmmSearcher<'a> {
         blocked
     }
 
+    fn min_hops_to_target<'cache>(
+        &self,
+        target: petgraph::graph::NodeIndex,
+        token_in: Address,
+        token_out: Address,
+        connector_tokens: Option<&HashSet<Address>>,
+        max_hops: usize,
+        run_cache: &'cache mut HeuristicRunCache,
+    ) -> &'cache HashMap<petgraph::graph::NodeIndex, usize> {
+        run_cache.min_hops_to_target.get_or_insert_with(|| {
+            let mut distances = HashMap::new();
+            distances.insert(target, 0_usize);
+            let max_distance = max_hops.saturating_sub(1);
+            if max_distance == 0 {
+                return distances;
+            }
+
+            let mut queue = VecDeque::from([(target, 0_usize)]);
+            while let Some((node, distance)) = queue.pop_front() {
+                if distance >= max_distance {
+                    continue;
+                }
+
+                for edge in self.graph.graph().edges_directed(node, Direction::Incoming) {
+                    let prev_node = edge.source();
+                    if distances.contains_key(&prev_node) {
+                        continue;
+                    }
+
+                    let prev_token = self.graph.graph()[prev_node];
+                    if !connector_allowed_with_tokens(
+                        prev_token,
+                        token_in,
+                        token_out,
+                        connector_tokens,
+                    ) {
+                        continue;
+                    }
+
+                    distances.insert(prev_node, distance + 1);
+                    queue.push_back((prev_node, distance + 1));
+                }
+            }
+
+            distances
+        })
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn has_static_route_to_target(
         &self,
         start: petgraph::graph::NodeIndex,
+        extra_visited_token: Address,
+        extra_used_pool: &PoolKey,
         source: petgraph::graph::NodeIndex,
         target: petgraph::graph::NodeIndex,
         token_in: Address,
         token_out: Address,
         connector_tokens: Option<&HashSet<Address>>,
-        mut visited_tokens: HashSet<Address>,
-        mut used_pools: HashSet<PoolKey>,
+        visited_tokens: &HashSet<Address>,
+        used_pools: &HashSet<PoolKey>,
+        remaining_hops: usize,
         max_hops: usize,
         allow_final_source_revisit: bool,
+        run_cache: &mut HeuristicRunCache,
     ) -> bool {
         if start == target {
             return true;
         }
-        if max_hops == 0 {
+        if remaining_hops == 0 {
             return false;
         }
 
-        self.has_static_route_to_target_dfs(
-            start,
-            source,
+        let min_hops = self.min_hops_to_target(
             target,
             token_in,
             token_out,
             connector_tokens,
-            &mut visited_tokens,
-            &mut used_pools,
             max_hops,
-            allow_final_source_revisit,
-        )
-    }
+            run_cache,
+        );
+        if min_hops
+            .get(&start)
+            .is_none_or(|&dist| dist > remaining_hops)
+        {
+            return false;
+        }
 
-    #[allow(clippy::too_many_arguments)]
-    fn has_static_route_to_target_dfs(
-        &self,
-        node: petgraph::graph::NodeIndex,
-        source: petgraph::graph::NodeIndex,
-        target: petgraph::graph::NodeIndex,
-        token_in: Address,
-        token_out: Address,
-        connector_tokens: Option<&HashSet<Address>>,
-        visited_tokens: &mut HashSet<Address>,
-        used_pools: &mut HashSet<PoolKey>,
-        remaining_hops: usize,
-        allow_final_source_revisit: bool,
-    ) -> bool {
-        for edge in self.graph.outgoing_edges(node) {
-            let next_node = edge.target;
-            let next_token = edge.token_out;
-            let pool = &edge.pool;
+        let mut seen = HashSet::new();
+        seen.insert(start);
+        let mut queue = VecDeque::from([(start, 0_usize)]);
 
-            if used_pools.contains(pool) {
-                continue;
-            }
+        while let Some((node, depth)) = queue.pop_front() {
+            let next_depth = depth + 1;
+            let remaining_after = remaining_hops - next_depth;
 
-            let closes_target = next_node == target;
-            let closes_source_cycle =
-                allow_final_source_revisit && source == target && next_node == source;
+            for edge in self.graph.outgoing_edges(node) {
+                let pool = &edge.pool;
+                if pool == extra_used_pool || used_pools.contains(pool) {
+                    continue;
+                }
 
-            if visited_tokens.contains(&next_token) && !closes_source_cycle {
-                continue;
-            }
+                let next_node = edge.target;
+                let next_token = edge.token_out;
+                let closes_target = next_node == target;
+                let closes_source_cycle =
+                    allow_final_source_revisit && source == target && next_node == source;
 
-            if !closes_target
-                && !connector_allowed_with_tokens(next_token, token_in, token_out, connector_tokens)
-            {
-                continue;
-            }
+                if !closes_source_cycle
+                    && (next_token == extra_visited_token || visited_tokens.contains(&next_token))
+                {
+                    continue;
+                }
 
-            if closes_target {
-                return true;
-            }
-            if remaining_hops <= 1 {
-                continue;
-            }
+                if closes_target {
+                    return true;
+                }
 
-            let inserted_token = visited_tokens.insert(next_token);
-            let inserted_pool = used_pools.insert(pool.clone());
-            debug_assert!(inserted_token);
-            debug_assert!(inserted_pool);
-            let found = self.has_static_route_to_target_dfs(
-                next_node,
-                source,
-                target,
-                token_in,
-                token_out,
-                connector_tokens,
-                visited_tokens,
-                used_pools,
-                remaining_hops - 1,
-                allow_final_source_revisit,
-            );
-            if inserted_pool {
-                used_pools.remove(pool);
-            }
-            if inserted_token {
-                visited_tokens.remove(&next_token);
-            }
-            if found {
-                return true;
+                if remaining_after == 0 {
+                    continue;
+                }
+
+                if !connector_allowed_with_tokens(next_token, token_in, token_out, connector_tokens)
+                {
+                    continue;
+                }
+
+                if min_hops
+                    .get(&next_node)
+                    .is_none_or(|&dist| dist > remaining_after)
+                {
+                    continue;
+                }
+
+                if seen.insert(next_node) {
+                    queue.push_back((next_node, next_depth));
+                }
             }
         }
 
@@ -5463,6 +5496,7 @@ struct ConnectorScore {
 struct HeuristicRunCache {
     token_degrees: HashMap<petgraph::graph::NodeIndex, usize>,
     connector_scores: HashMap<Address, ConnectorScore>,
+    min_hops_to_target: Option<HashMap<petgraph::graph::NodeIndex, usize>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
