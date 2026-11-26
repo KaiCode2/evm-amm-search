@@ -80,6 +80,7 @@ fast lane and frontier ordering. A single request now keeps:
 | --- | --- | --- |
 | token degree by `NodeIndex` | one heuristic request | Graph topology cannot change during one search call. |
 | connector score by token | one heuristic request | Liquidity freshness is evaluated from the attached index at request time. |
+| reverse minimum hops to `target` by `NodeIndex` | one heuristic request | Topology, `target`, `connector_tokens`, and `max_hops` are invariant during one search call (see [static-reachability.md](./static-reachability.md)). |
 
 These caches are not stored on `AmmSearcher`. They are created for one
 heuristic run and discarded when the request finishes, so live graph updates or

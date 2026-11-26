@@ -39,7 +39,7 @@ jobs:
         with:
           path: evm-amm-search
 
-      - uses: dtolnay/rust-toolchain@1.88
+      - uses: dtolnay/rust-toolchain@1.90
 
       - uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
         with:
@@ -205,9 +205,16 @@ jobs:
           DIGEST: ${{ needs.publish.outputs.digest }}
           VERSION: ${{ needs.publish.outputs.version }}
         run: |
+          cat > release-notes.md <<EOF
+          Self-hosted AMM routing sidecar public beta.
+
+          Immutable image: $IMAGE@$DIGEST
+
+          Pin the digest in deployments. The executor is unaudited and executable quoting is disabled by default.
+          EOF
           gh release create "$GITHUB_REF_NAME" artifacts/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --prerelease \
             --title "evm-amm-route-sidecar $VERSION beta" \
-            --notes "Self-hosted AMM routing sidecar public beta.\n\nImmutable image: $IMAGE@$DIGEST\n\nNo latest tag is published. Pin the digest in deployments. The executor is unaudited, executable quoting is disabled by default, and this release is deliberately not described as production-grade."
+            --notes-file release-notes.md

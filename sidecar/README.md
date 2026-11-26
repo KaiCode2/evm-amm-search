@@ -82,7 +82,7 @@ For a published beta, pin either its immutable version tag or, preferably, its
 manifest digest and use the pull-only Compose profile:
 
 ```bash
-export AMM_ROUTE_IMAGE=ghcr.io/kaicode2/evm-amm-route-sidecar:0.1.0-beta.1
+export AMM_ROUTE_IMAGE=ghcr.io/kaicode2/evm-amm-route-sidecar:0.1.0-beta.2
 export ETHEREUM_WS_URL=wss://your-ethereum-node
 export AMM_ROUTE_ADMIN_TOKEN="$(openssl rand -hex 32)"
 docker compose -f sidecar/compose.release.yaml pull

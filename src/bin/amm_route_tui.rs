@@ -2163,6 +2163,10 @@ async fn bootstrap_live_tui_inner(
         Some(baseline_header.inner.number),
         baseline_header.inner.base_fee_per_gas,
     );
+    cache.set_coinbase(Some(baseline_header.inner.beneficiary));
+    cache.set_prevrandao(Some(baseline_header.inner.mix_hash));
+    cache.set_block_gas_limit(Some(baseline_header.inner.gas_limit));
+    cache.set_timestamp(Some(baseline_header.inner.timestamp));
     cache
         .apply_prepared_account_patch(&quote_targets)
         .context("install verified shared AMM quote entrypoints")?;
@@ -7599,10 +7603,10 @@ fn ctx_from_log(log: &RpcLog, chain_id: u64) -> ReactiveContext {
     };
     let chain_status = match (&block, log.removed) {
         (Some(block), true) => ChainStatus::Reorged {
-            dropped_from: block.clone(),
+            dropped_from: *block,
         },
         (Some(block), false) => ChainStatus::Included {
-            block: block.clone(),
+            block: *block,
             confirmations: 0,
         },
         (None, _) => ChainStatus::Pending,

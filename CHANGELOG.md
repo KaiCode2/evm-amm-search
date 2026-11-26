@@ -5,6 +5,22 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-05
+
+### Changed
+
+- Aligns public state/cache types with `evm-amm-state 0.3.0`,
+  `evm-fork-cache 0.4.0`, and `alloy-transport-balancer 0.3.0`. Rust 1.90 is
+  required. Update downstream dependencies together to preserve type identity.
+- Updates the bundled TUI dependency set. The routing sidecar follows on its
+  independent beta version line and does not sign or submit transactions.
+
+### Fixed
+
+- Initialize the TUI EVM block environment from the verified header
+  before starting the AMM runtime, including coinbase, randomness, gas limit,
+  and timestamp.
+
 ## [0.1.2] - 2026-07-22
 
 ### Added
@@ -213,7 +229,9 @@ based on Keep a Changelog and this project follows Semantic Versioning.
 - Benchmark failure observers now survive receiver lag and report skipped-event
   counts instead of silently returning a false zero-failure summary.
 
-[Unreleased]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/KaiCode2/evm-amm-search/compare/v0.2.0...HEAD
 [0.1.2]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/KaiCode2/evm-amm-search/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/KaiCode2/evm-amm-search/releases/tag/v0.1.0
+
+[0.2.0]: https://github.com/KaiCode2/evm-amm-search/releases/tag/v0.2.0

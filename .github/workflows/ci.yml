@@ -24,19 +24,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: evm-amm-search
-      - uses: actions/checkout@v4
-        with:
-          repository: KaiCode2/evm-amm-state
-          path: evm-amm-state
-      - uses: actions/checkout@v4
-        with:
-          repository: KaiCode2/evm-fork-cache
-          path: evm-fork-cache
-      - uses: actions/checkout@v4
-        with:
-          repository: KaiCode2/alloy-transport-balancer
-          path: alloy-transport-balancer
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -95,26 +82,13 @@ jobs:
           ignore: RUSTSEC-2025-0055
 
   msrv:
-    name: msrv (1.88)
+    name: msrv (1.90)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           path: evm-amm-search
-      - uses: actions/checkout@v4
-        with:
-          repository: KaiCode2/evm-amm-state
-          path: evm-amm-state
-      - uses: actions/checkout@v4
-        with:
-          repository: KaiCode2/evm-fork-cache
-          path: evm-fork-cache
-      - uses: actions/checkout@v4
-        with:
-          repository: KaiCode2/alloy-transport-balancer
-          path: alloy-transport-balancer
-
-      - uses: dtolnay/rust-toolchain@1.88
+      - uses: dtolnay/rust-toolchain@1.90
 
       - uses: Swatinem/rust-cache@v2
         with:

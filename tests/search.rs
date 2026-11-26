@@ -3215,6 +3215,146 @@ async fn parallel_route_batch_reuses_quote_cache_across_workers() {
     );
 }
 
+#[test]
+fn heuristic_dead_end_reachability_does_not_blow_up_at_high_hop_depth() {
+    let tokens: Vec<Address> = (1_u8..=7).map(addr).collect();
+    let target = addr(0x90);
+    let decoy = addr(0x91);
+
+    let mut registry = registry_with_mock_adapter([]);
+    let mut pool_id = 0x20_u8;
+    for i in 0..tokens.len() {
+        for j in (i + 1)..tokens.len() {
+            for _ in 0..3 {
+                register(&mut registry, ready_v2(addr(pool_id), tokens[i], tokens[j]));
+                pool_id += 1;
+            }
+        }
+    }
+    register(&mut registry, ready_v2(addr(pool_id), target, decoy));
+
+    let graph = AmmGraph::from_registry(&registry, GraphBuildOptions::default()).graph;
+    let searcher = AmmSearcher::new(&registry, &graph);
+    let mut cache = NoopCache;
+    let request = RouteRequest::new(tokens[0], target, U256::from(100_u64)).with_config(
+        SearchConfig::default()
+            .with_hops(1, 6)
+            .with_connector_tokens(tokens.iter().copied())
+            .with_mode(SearchMode::Heuristic(
+                HeuristicSearchConfig::default()
+                    .with_beam_width(None)
+                    .with_prefix_dominance(false)
+                    .with_fast_lane(FastLaneConfig::disabled())
+                    .with_finalist_simulation(false, 1),
+            )),
+    );
+
+    let started = std::time::Instant::now();
+    let err = searcher
+        .find_routes(&request, &mut cache)
+        .expect_err("target is in a disconnected component");
+    let elapsed = started.elapsed();
+
+    assert!(
+        matches!(err, SearchError::NoPath { .. }),
+        "expected NoPath, got {err:?}"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_millis(200),
+        "static reachability took {elapsed:?} on a 7-token / 63-pool dead-end clique at max_hops=6"
+    );
+}
+
+#[test]
+fn heuristic_reachability_respects_used_pools_and_source_cycle() {
+    let a = addr(0x01);
+    let b = addr(0x02);
+    let c = addr(0x03);
+    let shared_curve = PoolKey::Curve(addr(0x40));
+
+    let (mut registry, counts) = registry_with_counting_mock_adapter([
+        rate(shared_curve.clone(), a, b, 2, 1),
+        rate(shared_curve.clone(), b, c, 2, 1),
+        rate(shared_curve.clone(), a, c, 2, 1),
+    ]);
+    let curve_reg = PoolRegistration::new(shared_curve.clone())
+        .with_metadata(ProtocolMetadata::Curve(
+            evm_amm_state::adapters::CurveMetadata::default().with_coins(vec![a, b, c]),
+        ))
+        .with_status(PoolStatus::Ready);
+    register(&mut registry, curve_reg);
+
+    let graph = AmmGraph::from_registry(&registry, GraphBuildOptions::default()).graph;
+    let searcher = AmmSearcher::new(&registry, &graph);
+    let mut cache = NoopCache;
+    let request = RouteRequest::new(a, c, U256::from(100_u64)).with_config(
+        SearchConfig::default()
+            .with_hops(2, 3)
+            .with_connector_tokens([b])
+            .with_mode(SearchMode::Heuristic(
+                HeuristicSearchConfig::default()
+                    .with_fast_lane(FastLaneConfig::disabled())
+                    .with_finalist_simulation(false, 1),
+            )),
+    );
+
+    let err = searcher
+        .find_routes(&request, &mut cache)
+        .expect_err("cannot traverse A->B->C reusing the same multi-token pool");
+    assert!(
+        matches!(err, SearchError::NoPath { .. }),
+        "expected NoPath when only 2-hop path reuses pool, got {err:?}"
+    );
+    let counts = counts.lock().expect("counts lock");
+    assert_eq!(
+        counts.get(&(shared_curve.clone(), a, b, U256::from(100_u64))),
+        None,
+        "dead-end A->B hop should be pruned before quoting"
+    );
+    assert_eq!(
+        counts.get(&(shared_curve, b, c, U256::from(200_u64))),
+        None,
+        "B->C hop reusing the same pool must never be quoted"
+    );
+    drop(counts);
+
+    // Cycle check: A -> B -> A succeeds with two distinct pools, fails with only one.
+    let p1 = PoolKey::UniswapV2(addr(0x50));
+    let p2 = PoolKey::UniswapV2(addr(0x51));
+    let mut single_pool_registry =
+        registry_with_mock_adapter([rate(p1.clone(), a, b, 2, 1), rate(p1.clone(), b, a, 2, 1)]);
+    register(&mut single_pool_registry, ready_v2(addr(0x50), a, b));
+    let single_graph =
+        AmmGraph::from_registry(&single_pool_registry, GraphBuildOptions::default()).graph;
+    let single_searcher = AmmSearcher::new(&single_pool_registry, &single_graph);
+    let cycle_request = CycleRequest::new(a, U256::from(100_u64)).with_config(
+        SearchConfig::default()
+            .with_hops(2, 3)
+            .with_connector_tokens([b])
+            .with_mode(SearchMode::Heuristic(
+                HeuristicSearchConfig::default()
+                    .with_fast_lane(FastLaneConfig::disabled())
+                    .with_finalist_simulation(false, 1),
+            )),
+    );
+    let err = single_searcher
+        .find_cycles(&cycle_request, &mut cache)
+        .expect_err("single pool cannot close a 2-hop cycle");
+    assert!(matches!(err, SearchError::NoPath { .. }));
+
+    let mut two_pool_registry =
+        registry_with_mock_adapter([rate(p1.clone(), a, b, 2, 1), rate(p2.clone(), b, a, 2, 1)]);
+    register(&mut two_pool_registry, ready_v2(addr(0x50), a, b));
+    register(&mut two_pool_registry, ready_v2(addr(0x51), a, b));
+    let two_graph = AmmGraph::from_registry(&two_pool_registry, GraphBuildOptions::default()).graph;
+    let two_searcher = AmmSearcher::new(&two_pool_registry, &two_graph);
+    let cycles = two_searcher
+        .find_cycles(&cycle_request, &mut cache)
+        .expect("two distinct pools close the A->B->A cycle");
+    assert_eq!(cycles.len(), 1);
+    assert_eq!(cycles[0].route.path.hops.len(), 2);
+}
+
 fn registry_with_mock_adapter(rates: impl IntoIterator<Item = Rate>) -> AdapterRegistry {
     let mut registry = AdapterRegistry::new();
     registry
